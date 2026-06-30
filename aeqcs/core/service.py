@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -47,10 +47,58 @@ class CoreService:
         frame = frame[frame["date"] <= as_of_date]
         outputs: list[dict[str, Any]] = []
         if "momentum_20d" in factor_ids:
-            outputs.extend(compute_panel_momentum(frame, window=20).dropna().to_dict("records"))
+            outputs.extend(
+                self._factor_frame_to_records(
+                    compute_panel_momentum(frame, window=20),
+                    "momentum_20d",
+                    "momentum_20d",
+                    as_of_date,
+                )
+            )
         if "momentum_1d" in factor_ids:
-            outputs.extend(compute_panel_momentum(frame, window=1).dropna().to_dict("records"))
+            outputs.extend(
+                self._factor_frame_to_records(
+                    compute_panel_momentum(frame, window=1),
+                    "momentum_1d",
+                    "momentum_1d",
+                    as_of_date,
+                )
+            )
+        self.store.save_factor_values(outputs)
         return outputs
+
+    def _factor_frame_to_records(
+        self,
+        frame,
+        factor_id: str,
+        value_column: str,
+        as_of_date: date,
+    ) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        calc_timestamp = datetime.combine(as_of_date, datetime.min.time())
+        for row in frame.dropna(subset=[value_column]).to_dict("records"):
+            records.append(
+                {
+                    "symbol": row["symbol"],
+                    "date": row["date"],
+                    "factor_id": factor_id,
+                    "version": 1,
+                    "value": row[value_column],
+                    "calc_timestamp": calc_timestamp,
+                }
+            )
+        return records
+
+    def get_factor_values(
+        self,
+        factor_ids: list[str],
+        start_date: date,
+        end_date: date,
+        as_of_date: date,
+    ) -> list[dict[str, Any]]:
+        require_as_of(as_of_date)
+        assert_not_after(end_date, as_of_date)
+        return self.store.get_factor_values(factor_ids, start_date, end_date, as_of_date)
 
     def run_backtest(
         self,

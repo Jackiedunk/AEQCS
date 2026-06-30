@@ -42,6 +42,18 @@ class CoreStore(Protocol):
     def get_backtest_result(self, backtest_result_id: str) -> dict[str, Any]:
         ...
 
+    def save_factor_values(self, values: list[dict[str, Any]]) -> int:
+        ...
+
+    def get_factor_values(
+        self,
+        factor_ids: list[str],
+        start_date: date,
+        end_date: date,
+        as_of_date: date,
+    ) -> list[dict[str, Any]]:
+        ...
+
 
 class AsyncCoreStore(Protocol):
     async def load_daily(self) -> pd.DataFrame:
@@ -80,4 +92,16 @@ class AsyncCoreStore(Protocol):
         ...
 
     async def get_backtest_result(self, backtest_result_id: str) -> dict[str, Any]:
+        ...
+
+    async def save_factor_values(self, values: list[dict[str, Any]]) -> int:
+        ...
+
+    async def get_factor_values(
+        self,
+        factor_ids: list[str],
+        start_date: date,
+        end_date: date,
+        as_of_date: date,
+    ) -> list[dict[str, Any]]:
         ...

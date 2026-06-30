@@ -28,6 +28,7 @@ class LocalStore:
         self.financial_path = self.root / "financial_indicators.csv"
         self.proposals_path = self.root / "proposals.csv"
         self.backtest_results_path = self.root / "backtest_results.csv"
+        self.factor_values_path = self.root / "factor_values.csv"
 
     def load_daily(self) -> pd.DataFrame:
         if not self.daily_path.exists():
@@ -164,3 +165,47 @@ class LocalStore:
             "fills": json.loads(row["fills"]),
             "nav": json.loads(row["nav"]),
         }
+
+    def save_factor_values(self, values: list[dict[str, Any]]) -> int:
+        if not values:
+            return 0
+        incoming = pd.DataFrame(values)
+        incoming["symbol"] = incoming["symbol"].astype(str)
+        incoming["date"] = pd.to_datetime(incoming["date"]).dt.date
+        incoming["factor_id"] = incoming["factor_id"].astype(str)
+        incoming["version"] = incoming["version"].astype(int)
+        incoming["calc_timestamp"] = pd.to_datetime(incoming["calc_timestamp"]).astype(str)
+        existing = (
+            pd.read_csv(self.factor_values_path, dtype={"symbol": str, "factor_id": str})
+            if self.factor_values_path.exists()
+            else pd.DataFrame()
+        )
+        merged = pd.concat([existing, incoming], ignore_index=True)
+        merged = merged.drop_duplicates(["symbol", "date", "factor_id", "version"], keep="last")
+        merged.to_csv(self.factor_values_path, index=False)
+        return len(incoming)
+
+    def get_factor_values(
+        self,
+        factor_ids: list[str],
+        start_date: date,
+        end_date: date,
+        as_of_date: date,
+    ) -> list[dict[str, Any]]:
+        require_as_of(as_of_date)
+        assert_not_after(end_date, as_of_date)
+        if not self.factor_values_path.exists():
+            return []
+        frame = pd.read_csv(self.factor_values_path, dtype={"symbol": str, "factor_id": str})
+        frame["date"] = pd.to_datetime(frame["date"]).dt.date
+        frame["calc_timestamp"] = pd.to_datetime(frame["calc_timestamp"])
+        subset = frame[
+            frame["factor_id"].isin(factor_ids)
+            & (frame["date"] >= start_date)
+            & (frame["date"] <= end_date)
+            & (frame["date"] <= as_of_date)
+        ]
+        subset = subset.sort_values(["factor_id", "symbol", "date"]).copy()
+        subset["date"] = subset["date"].map(lambda value: value.isoformat())
+        subset["calc_timestamp"] = subset["calc_timestamp"].map(lambda value: value.isoformat())
+        return subset.to_dict("records")

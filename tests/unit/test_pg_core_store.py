@@ -26,6 +26,13 @@ class FakeConn:
         self.calls.append(("fetchval", query, args))
         return 1
 
+    async def execute(self, query, *args):
+        self.calls.append(("execute", query, args))
+        return "OK"
+
+    def transaction(self):
+        return AcquireContext(self)
+
 
 class AcquireContext:
     def __init__(self, conn):
@@ -115,3 +122,37 @@ async def test_pg_save_backtest_result_upserts_report():
     assert kind == "fetchval"
     assert "INSERT INTO backtest_results" in query
     assert args[0] == "abc"
+
+
+@pytest.mark.asyncio
+async def test_pg_factor_values_upsert_and_query():
+    pool = FakePool()
+    store = PgCoreStore(pool)
+
+    count = await store.save_factor_values(
+        [
+            {
+                "symbol": "000001",
+                "date": date(2026, 1, 2),
+                "factor_id": "momentum_1d",
+                "version": 1,
+                "value": 0.1,
+                "calc_timestamp": date(2026, 1, 2),
+            }
+        ]
+    )
+    await store.get_factor_values(
+        ["momentum_1d"],
+        date(2026, 1, 1),
+        date(2026, 1, 2),
+        date(2026, 1, 2),
+    )
+
+    assert count == 1
+    assert any(call[0] == "execute" and "INSERT INTO factor_values" in call[1] for call in pool.conn.calls)
+    assert pool.conn.calls[-1][2] == (
+        ["momentum_1d"],
+        date(2026, 1, 1),
+        date(2026, 1, 2),
+        date(2026, 1, 2),
+    )

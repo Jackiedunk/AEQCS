@@ -22,6 +22,7 @@ def tool_manifest() -> list[dict[str, Any]]:
         {"name": "run_backtest", "requires_as_of": True},
         {"name": "get_backtest_result", "requires_as_of": False},
         {"name": "compute_factors", "requires_as_of": True},
+        {"name": "get_factor_values", "requires_as_of": True},
         {"name": "load_inbox", "requires_as_of": False},
         {"name": "system_health", "requires_as_of": False},
     ]
@@ -56,6 +57,15 @@ def call_local_tool(name: str, arguments: dict[str, Any], root: str = "data/loca
     if name == "compute_factors":
         return to_jsonable(
             service.compute_factors(
+                list(arguments["factor_ids"]),
+                parse_date(arguments["start_date"]),
+                parse_date(arguments["end_date"]),
+                parse_date(arguments["as_of_date"]),
+            )
+        )
+    if name == "get_factor_values":
+        return to_jsonable(
+            service.get_factor_values(
                 list(arguments["factor_ids"]),
                 parse_date(arguments["start_date"]),
                 parse_date(arguments["end_date"]),

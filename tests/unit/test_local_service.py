@@ -80,6 +80,16 @@ def test_local_backtest_and_factor_tools(tmp_path):
         },
         root=str(tmp_path),
     )
+    stored_factor_rows = call_local_tool(
+        "get_factor_values",
+        {
+            "factor_ids": ["momentum_1d"],
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-05",
+            "as_of_date": "2026-01-05",
+        },
+        root=str(tmp_path),
+    )
     run_result = call_local_tool(
         "run_backtest",
         {
@@ -98,6 +108,9 @@ def test_local_backtest_and_factor_tools(tmp_path):
     )
 
     assert factor_rows
+    assert stored_factor_rows
+    assert stored_factor_rows[0]["factor_id"] == "momentum_1d"
+    assert stored_factor_rows[0]["date"] == "2026-01-02"
     assert result["fills"][0]["date"] == "2026-01-02"
     json.dumps(result)
 
@@ -129,6 +142,22 @@ def test_local_service_rejects_unknown_factor(tmp_path):
                 "factor_ids": ["unknown_factor"],
                 "start_date": "2026-01-01",
                 "end_date": "2026-01-02",
+                "as_of_date": "2026-01-02",
+            },
+            root=str(tmp_path),
+        )
+
+
+def test_local_factor_values_reject_end_date_after_as_of(tmp_path):
+    seed_store(tmp_path)
+
+    with pytest.raises(LookAheadViolation):
+        call_local_tool(
+            "get_factor_values",
+            {
+                "factor_ids": ["momentum_1d"],
+                "start_date": "2026-01-01",
+                "end_date": "2026-01-05",
                 "as_of_date": "2026-01-02",
             },
             root=str(tmp_path),

@@ -190,3 +190,53 @@ class PgCoreStore(AsyncCoreStore):
             """,
             backtest_result_id,
         )
+
+    async def save_factor_values(self, values: list[dict[str, Any]]) -> int:
+        if not values:
+            return 0
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                for row in values:
+                    await conn.execute(
+                        """
+                        INSERT INTO factor_values (
+                          symbol, date, factor_id, version, value, calc_timestamp
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (symbol, date, factor_id, version) DO UPDATE
+                        SET value=EXCLUDED.value,
+                            calc_timestamp=EXCLUDED.calc_timestamp
+                        """,
+                        row["symbol"],
+                        row["date"],
+                        row["factor_id"],
+                        row.get("version", 1),
+                        row["value"],
+                        row["calc_timestamp"],
+                    )
+        return len(values)
+
+    async def get_factor_values(
+        self,
+        factor_ids: list[str],
+        start_date: date,
+        end_date: date,
+        as_of_date: date,
+    ) -> list[dict[str, Any]]:
+        require_as_of(as_of_date)
+        assert_not_after(end_date, as_of_date)
+        return await self._fetch(
+            """
+            SELECT symbol, date, factor_id, version, value, calc_timestamp
+            FROM factor_values
+            WHERE factor_id = ANY($1)
+              AND date >= $2
+              AND date <= $3
+              AND date <= $4
+            ORDER BY factor_id, symbol, date
+            """,
+            factor_ids,
+            start_date,
+            end_date,
+            as_of_date,
+        )
