@@ -175,3 +175,5 @@ async def test_pg_save_uploaded_doc_replaces_chunks():
 
     assert result == {"doc_id": 1, "sha256": "abc", "chunks": 1}
     assert any(call[0] == "execute" and "DELETE FROM doc_chunks" in call[1] for call in pool.conn.calls)
+    assert any(call[0] == "execute" and "ON CONFLICT (doc_id, seq)" in call[1] for call in pool.conn.calls)
+    assert any(call[0] == "fetchval" and "doc_type=EXCLUDED.doc_type" in call[1] for call in pool.conn.calls)

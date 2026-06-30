@@ -9,7 +9,7 @@
 当前最后一个已确认推送到 GitHub 的提交是：
 
 ```text
-本进度文档所在提交：Harden inbox upload validation
+本进度文档所在提交：Add async inbox service path
 ```
 
 GitHub 仓库：
@@ -18,7 +18,7 @@ GitHub 仓库：
 https://github.com/Jackiedunk/AEQCS
 ```
 
-本次已把通过验证的“上传入口安全校验加固”和本进度文档纳入提交并准备推送到 GitHub。
+本次已把通过验证的“PG 上传服务路径与 schema 约束”纳入提交并准备推送到 GitHub。
 
 ## 已完成并推送的阶段
 
@@ -196,15 +196,34 @@ f7289bf Persist backtest reports behind tool contract
 本进度文档所在提交：Harden inbox upload validation
 ```
 
+### 11. PG 上传服务路径与 schema 约束
+
+已完成：
+
+- 增加 `parse_text_upload`，支持不落盘地从上传字节生成标准 `ParsedDocument`
+- 增加 `AsyncCoreService.load_inbox`
+- 异步上传路径可直接服务 `PgCoreStore`
+- PG 上传路径复用同一套安全文件名、base64、UTF-8、分块和 proposal 抽取逻辑
+- `PgCoreStore.save_uploaded_doc` 重复 sha256 时同步更新 filename/doc_type/path/status
+- `doc_chunks` 增加 doc 外键、非空 doc_id/seq、`(doc_id, seq)` 唯一约束
+- chunk 写入支持 `(doc_id, seq)` 冲突更新
+- 增加异步服务测试、PG upsert 语义测试和 schema 约束测试
+
+对应提交：
+
+```text
+本进度文档所在提交：Add async inbox service path
+```
+
 ## 当前工作区状态
 
 本次推送前验证通过：
 
 ```text
 python -m pytest
-39 passed
+42 passed
 
-python -m compileall aeqcs tests scripts
+python -m compileall aeqcs tests scripts deploy
 passed
 ```
 
@@ -213,7 +232,7 @@ passed
 ```powershell
 git --git-dir=.aeqcs_git --work-tree=. status --short
 python -m pytest
-python -m compileall aeqcs tests scripts
+python -m compileall aeqcs tests scripts deploy
 ```
 
 ## 已验证测试规模
@@ -221,7 +240,7 @@ python -m compileall aeqcs tests scripts
 当前推送前测试规模：
 
 ```text
-39 passed
+42 passed
 ```
 
 ## 重要技术约束和已守住的边界
@@ -240,6 +259,7 @@ python -m compileall aeqcs tests scripts
 - 股票代码前导零在本地 CSV 中保留
 - 上传文件名拒绝路径穿越和非文本扩展名
 - 上传文档解析错误使用项目内显式错误类型
+- PG 文档 chunk 受 doc 外键和 `(doc_id, seq)` 唯一约束保护
 
 ## 仍未完成的主要范围
 
@@ -254,7 +274,7 @@ python -m compileall aeqcs tests scripts
 - Telegram 告警未实现
 - intraday 监听和 CEP 规则执行未实现
 - semantic network 的写入、搜索、递归树接口还很薄
-- 上传学习闭环已做到本地文档解析/分块/简单 proposal 抽取和文件名安全校验，未做 embedding、PDF/EPUB、人工审核 UI
+- 上传学习闭环已做到本地/PG 文档解析、分块、简单 proposal 抽取和文件名安全校验，未做 embedding、PDF/EPUB、人工审核 UI
 - dashboard 未实现
 - 报告系统未实现
 - 8 个 agent 只有角色 prompt，还没有完整行为实现
@@ -265,12 +285,11 @@ python -m compileall aeqcs tests scripts
 
 恢复时建议进入以下顺序：
 
-1. 完成真实 `load_inbox` 的 PG 集成测试和 schema 细节修正
-2. 实现 MCP stdio 服务真实工具注册
-3. 增加 PostgreSQL 集成测试配置
-4. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
-5. 实现 semantic network 的本地/PG 节点边写入和查询
-6. 把上传提案接到闸门验证和晋升流程
+1. 实现 MCP stdio 服务真实工具注册
+2. 增加 PostgreSQL 集成测试配置
+3. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
+4. 实现 semantic network 的本地/PG 节点边写入和查询
+5. 把上传提案接到闸门验证和晋升流程
 
 ## 说明
 

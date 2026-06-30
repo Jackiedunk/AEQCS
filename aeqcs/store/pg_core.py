@@ -250,7 +250,10 @@ class PgCoreStore(AsyncCoreStore):
                     INSERT INTO uploaded_docs (uploaded_ts, filename, doc_type, path, sha256, status, meta)
                     VALUES ($1, $2, $3, $4, $5, 'parsed', '{}'::jsonb)
                     ON CONFLICT (sha256) DO UPDATE
-                    SET filename=EXCLUDED.filename
+                    SET filename=EXCLUDED.filename,
+                        doc_type=EXCLUDED.doc_type,
+                        path=EXCLUDED.path,
+                        status='parsed'
                     RETURNING doc_id
                     """,
                     document.uploaded_ts,
@@ -265,6 +268,9 @@ class PgCoreStore(AsyncCoreStore):
                         """
                         INSERT INTO doc_chunks (doc_id, seq, text, embed_model)
                         VALUES ($1, $2, $3, NULL)
+                        ON CONFLICT (doc_id, seq) DO UPDATE
+                        SET text=EXCLUDED.text,
+                            embed_model=EXCLUDED.embed_model
                         """,
                         doc_id,
                         chunk.seq,

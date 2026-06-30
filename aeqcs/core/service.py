@@ -11,9 +11,16 @@ from aeqcs.core.versioning import assert_not_after, require_as_of, stable_hash
 from aeqcs.factor.compute.technical import compute_panel_momentum
 from aeqcs.gate.proposals import Proposal, ProposalReview, ProposalStatus
 from aeqcs.gate.validator import validate_structure
-from aeqcs.ingest.document_parser import chunk_text, decode_upload, parse_text_file, safe_upload_filename, sha256_bytes
+from aeqcs.ingest.document_parser import (
+    chunk_text,
+    decode_upload,
+    parse_text_file,
+    parse_text_upload,
+    safe_upload_filename,
+    sha256_bytes,
+)
 from aeqcs.ingest.extractor import extract_proposals
-from aeqcs.store.protocols import CoreStore
+from aeqcs.store.protocols import AsyncCoreStore, CoreStore
 from aeqcs.strategy.backtest.engine import BacktestReport, run_daily_backtest
 from aeqcs.strategy.base import BuyAndHoldStrategy
 
@@ -215,3 +222,48 @@ class CoreService:
             backtest_result=backtest_result,
         )
         return self.store.review_proposal(review)
+
+
+class AsyncCoreService:
+    def __init__(self, store: AsyncCoreStore) -> None:
+        self.store = store
+
+    async def load_inbox(self, filename: str, content_base64: str, doc_type: str = "note") -> dict[str, Any]:
+        content = decode_upload(content_base64)
+        document = parse_text_upload(filename, content, doc_type=doc_type)
+        chunks = chunk_text(document.sha256, document.text)
+        saved = await self.store.save_uploaded_doc(document, chunks)
+        proposal_ids = []
+        for proposal in extract_proposals(document.text, source=f"upload:{document.filename}"):
+            proposal_ids.append(
+                await self.submit_proposal(
+                    proposal["kind"],
+                    proposal["payload"],
+                    proposal["source"],
+                    proposal["confidence"],
+                )
+            )
+        return {**saved, "proposal_ids": proposal_ids}
+
+    async def get_uploaded_doc(self, sha256: str) -> dict[str, Any]:
+        return await self.store.get_uploaded_doc(sha256)
+
+    async def submit_proposal(
+        self,
+        kind: str,
+        payload: dict[str, Any],
+        source: str,
+        confidence: float,
+        snapshot_id: int | None = None,
+    ) -> int:
+        errors = validate_structure(kind, payload)
+        if errors:
+            raise ValueError("; ".join(errors))
+        proposal = Proposal(
+            kind=kind,
+            payload=payload,
+            source=source,
+            confidence=confidence,
+            snapshot_id=snapshot_id,
+        )
+        return await self.store.submit_proposal(proposal)

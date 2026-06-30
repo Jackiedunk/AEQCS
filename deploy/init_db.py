@@ -129,9 +129,14 @@ CREATE TABLE IF NOT EXISTS uploaded_docs (
 );
 
 CREATE TABLE IF NOT EXISTS doc_chunks (
-  chunk_id BIGSERIAL PRIMARY KEY, doc_id BIGINT, seq INT, text TEXT,
+  chunk_id BIGSERIAL PRIMARY KEY,
+  doc_id BIGINT NOT NULL REFERENCES uploaded_docs(doc_id) ON DELETE CASCADE,
+  seq INT NOT NULL,
+  text TEXT,
   embedding vector(768), embed_model VARCHAR(50)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_doc_chunks_doc_seq ON doc_chunks(doc_id, seq);
+CREATE INDEX IF NOT EXISTS idx_doc_chunks_doc_id ON doc_chunks(doc_id);
 CREATE INDEX IF NOT EXISTS idx_chunk_hnsw
   ON doc_chunks USING hnsw (embedding vector_cosine_ops);
 

@@ -60,21 +60,38 @@ def sha256_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-def parse_text_file(path: str | Path, doc_type: str = "note") -> ParsedDocument:
-    file_path = Path(path)
-    if file_path.suffix.lower() not in SUPPORTED_TEXT_SUFFIXES:
-        raise DocumentParseError(f"unsupported document type: {file_path.suffix}")
-    content = file_path.read_bytes()
+def parse_text_upload(
+    filename: str,
+    content: bytes,
+    doc_type: str = "note",
+    path: str | None = None,
+    uploaded_ts: datetime | None = None,
+) -> ParsedDocument:
+    safe_filename = safe_upload_filename(filename)
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise DocumentParseError("uploaded document must be utf-8 text") from exc
     return ParsedDocument(
-        filename=file_path.name,
-        path=str(file_path),
+        filename=safe_filename,
+        path=path or f"upload://{safe_filename}",
         sha256=sha256_bytes(content),
         text=text,
+        uploaded_ts=uploaded_ts or datetime.now(),
+        doc_type=doc_type,
+    )
+
+
+def parse_text_file(path: str | Path, doc_type: str = "note") -> ParsedDocument:
+    file_path = Path(path)
+    if file_path.suffix.lower() not in SUPPORTED_TEXT_SUFFIXES:
+        raise DocumentParseError(f"unsupported document type: {file_path.suffix}")
+    content = file_path.read_bytes()
+    return parse_text_upload(
+        filename=file_path.name,
+        path=str(file_path),
         uploaded_ts=datetime.fromtimestamp(file_path.stat().st_mtime),
+        content=content,
         doc_type=doc_type,
     )
 
