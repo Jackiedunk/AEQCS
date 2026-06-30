@@ -20,6 +20,16 @@ python -m venv .venv
 .\.venv\Scripts\python -m pytest
 ```
 
+PostgreSQL integration tests are opt-in. Use a disposable database with
+TimescaleDB and pgvector available:
+
+```powershell
+$env:AEQCS_TEST_PG_DSN = "postgresql://user:password@localhost:5432/aeqcs_test"
+python -m pytest tests/integration -m integration
+```
+
+See [docs/POSTGRES_INTEGRATION_TESTS.md](docs/POSTGRES_INTEGRATION_TESTS.md).
+
 Run the deterministic smoke backtest without external data:
 
 ```powershell
@@ -84,11 +94,12 @@ Implemented:
 - lazy Tushare and Akshare adapters with normalized outputs
 - local importers for daily bars and PIT financial indicators
 - upload learning loop first pass: text/Markdown parsing, chunking, dedupe, and proposal extraction
+- opt-in PostgreSQL integration test entrypoint for TimescaleDB/pgvector stores
 
 Still pending:
 
 - live Tushare/Akshare adapters
-- PostgreSQL integration tests on TimescaleDB/pgvector
+- live execution of the PostgreSQL integration tests against the target host
 - production PostgreSQL-backed MCP service wiring and deployment verification
 - production Qlib expression integration
 - Telegram, dashboard, report system, and full cognitive layer behavior

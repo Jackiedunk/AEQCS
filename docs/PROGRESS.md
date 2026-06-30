@@ -9,7 +9,7 @@
 当前最后一个已确认推送到 GitHub 的提交是：
 
 ```text
-本进度文档所在提交：Wire MCP stdio server tools
+本进度文档所在提交：Add PostgreSQL integration test entrypoint
 ```
 
 GitHub 仓库：
@@ -18,7 +18,7 @@ GitHub 仓库：
 https://github.com/Jackiedunk/AEQCS
 ```
 
-本次已把通过验证的“MCP stdio 工具注册”纳入提交并准备推送到 GitHub。
+本次已把通过验证的“PostgreSQL 集成测试入口”纳入提交并准备推送到 GitHub。
 
 ## 已完成并推送的阶段
 
@@ -233,13 +233,31 @@ f7289bf Persist backtest reports behind tool contract
 本进度文档所在提交：Wire MCP stdio server tools
 ```
 
+### 13. PostgreSQL 集成测试入口
+
+已完成：
+
+- 增加 pytest `integration` 标记
+- 增加 `tests/integration/test_pg_integration.py`
+- 集成测试默认跳过，只有设置 `AEQCS_TEST_PG_DSN` 时才连接真实数据库
+- 集成测试会执行 `deploy.init_db.SCHEMA_SQL`
+- 覆盖 PG 日线 PIT 查询、财务 PIT 查询、上传文档/chunk round trip、proposal 提交和审核 round trip
+- 增加 [docs/POSTGRES_INTEGRATION_TESTS.md](POSTGRES_INTEGRATION_TESTS.md) 说明运行前提和命令
+- README 增加可选 PG 集成测试运行方式
+
+对应提交：
+
+```text
+本进度文档所在提交：Add PostgreSQL integration test entrypoint
+```
+
 ## 当前工作区状态
 
 本次推送前验证通过：
 
 ```text
 python -m pytest
-45 passed
+45 passed, 1 skipped
 
 python -m compileall aeqcs tests scripts deploy
 passed
@@ -258,7 +276,7 @@ python -m compileall aeqcs tests scripts deploy
 当前推送前测试规模：
 
 ```text
-45 passed
+45 passed, 1 skipped
 ```
 
 ## 重要技术约束和已守住的边界
@@ -275,6 +293,7 @@ python -m compileall aeqcs tests scripts deploy
 - 回测使用次日开盘成交
 - MCP 本地工具输出经过 JSON 安全转换
 - MCP stdio 服务已能注册并调用当前已实现工具
+- PostgreSQL 集成测试入口已建立，未配置 DSN 时默认跳过
 - 股票代码前导零在本地 CSV 中保留
 - 上传文件名拒绝路径穿越和非文本扩展名
 - 上传文档解析错误使用项目内显式错误类型
@@ -285,7 +304,7 @@ python -m compileall aeqcs tests scripts deploy
 项目距离完整架构书仍有大量工作：
 
 - MCP stdio 本地工具服务已接通，但尚未接入生产 PG 连接配置和部署实测
-- PG/TimescaleDB/pgvector 未在真实数据库上做集成测试
+- PG/TimescaleDB/pgvector 集成测试入口已建立，但尚未在目标主机真实数据库上执行验证
 - Tushare/Akshare 真实网络数据未跑通
 - Qlib 表达式引擎尚未真正接入生产因子管线
 - 回测仍是最小 buy-and-hold 框架
@@ -304,11 +323,11 @@ python -m compileall aeqcs tests scripts deploy
 
 恢复时建议进入以下顺序：
 
-1. 增加 PostgreSQL 集成测试配置
-2. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
-3. 实现 semantic network 的本地/PG 节点边写入和查询
-4. 把上传提案接到闸门验证和晋升流程
-5. 接入生产 PG 配置下的 MCP 服务启动验证
+1. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
+2. 实现 semantic network 的本地/PG 节点边写入和查询
+3. 把上传提案接到闸门验证和晋升流程
+4. 接入生产 PG 配置下的 MCP 服务启动验证
+5. 在目标主机执行 `AEQCS_TEST_PG_DSN` 集成测试
 
 ## 说明
 
