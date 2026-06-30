@@ -9,7 +9,7 @@
 当前最后一个已确认推送到 GitHub 的提交是：
 
 ```text
-本进度文档所在提交：Add async inbox service path
+本进度文档所在提交：Wire MCP stdio server tools
 ```
 
 GitHub 仓库：
@@ -18,7 +18,7 @@ GitHub 仓库：
 https://github.com/Jackiedunk/AEQCS
 ```
 
-本次已把通过验证的“PG 上传服务路径与 schema 约束”纳入提交并准备推送到 GitHub。
+本次已把通过验证的“MCP stdio 工具注册”纳入提交并准备推送到 GitHub。
 
 ## 已完成并推送的阶段
 
@@ -215,13 +215,31 @@ f7289bf Persist backtest reports behind tool contract
 本进度文档所在提交：Add async inbox service path
 ```
 
+### 12. MCP stdio 工具注册
+
+已完成：
+
+- `aeqcs-mcp` 入口从占位退出改为启动 FastMCP stdio 服务
+- 增加 `build_mcp_server()`，便于测试和部署复用
+- 注册当前已实现的 12 个核心工具
+- manifest 删除未实现的 semantic 占位工具，避免客户端看到不可调用工具
+- MCP 工具复用现有 `call_local_tool` 确定性实现
+- 支持 `AEQCS_LOCAL_ROOT` 环境变量覆盖本地数据目录
+- 增加 MCP 工具注册、健康检查、上传调用测试
+
+对应提交：
+
+```text
+本进度文档所在提交：Wire MCP stdio server tools
+```
+
 ## 当前工作区状态
 
 本次推送前验证通过：
 
 ```text
 python -m pytest
-42 passed
+45 passed
 
 python -m compileall aeqcs tests scripts deploy
 passed
@@ -240,7 +258,7 @@ python -m compileall aeqcs tests scripts deploy
 当前推送前测试规模：
 
 ```text
-42 passed
+45 passed
 ```
 
 ## 重要技术约束和已守住的边界
@@ -256,6 +274,7 @@ python -m compileall aeqcs tests scripts deploy
 - `approved` 只能进入 `promoted`
 - 回测使用次日开盘成交
 - MCP 本地工具输出经过 JSON 安全转换
+- MCP stdio 服务已能注册并调用当前已实现工具
 - 股票代码前导零在本地 CSV 中保留
 - 上传文件名拒绝路径穿越和非文本扩展名
 - 上传文档解析错误使用项目内显式错误类型
@@ -265,7 +284,7 @@ python -m compileall aeqcs tests scripts deploy
 
 项目距离完整架构书仍有大量工作：
 
-- 真正的 MCP stdio 服务未接通
+- MCP stdio 本地工具服务已接通，但尚未接入生产 PG 连接配置和部署实测
 - PG/TimescaleDB/pgvector 未在真实数据库上做集成测试
 - Tushare/Akshare 真实网络数据未跑通
 - Qlib 表达式引擎尚未真正接入生产因子管线
@@ -285,11 +304,11 @@ python -m compileall aeqcs tests scripts deploy
 
 恢复时建议进入以下顺序：
 
-1. 实现 MCP stdio 服务真实工具注册
-2. 增加 PostgreSQL 集成测试配置
-3. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
-4. 实现 semantic network 的本地/PG 节点边写入和查询
-5. 把上传提案接到闸门验证和晋升流程
+1. 增加 PostgreSQL 集成测试配置
+2. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
+3. 实现 semantic network 的本地/PG 节点边写入和查询
+4. 把上传提案接到闸门验证和晋升流程
+5. 接入生产 PG 配置下的 MCP 服务启动验证
 
 ## 说明
 

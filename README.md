@@ -26,9 +26,16 @@ Run the deterministic smoke backtest without external data:
 python -m aeqcs.runtime.batch smoke
 ```
 
-The MCP tool logic can also be exercised locally before PostgreSQL and stdio
-transport are configured. Use `aeqcs.core.mcp_server.call_local_tool` with a
-`LocalStore` rooted at a test or development data directory.
+The MCP tool logic can be exercised locally with
+`aeqcs.core.mcp_server.call_local_tool` and a `LocalStore` rooted at a test or
+development data directory.
+
+To start the local stdio MCP server:
+
+```powershell
+$env:AEQCS_LOCAL_ROOT = "data/local"
+aeqcs-mcp
+```
 
 To import real Tushare data into the local development store:
 
@@ -73,13 +80,15 @@ Implemented:
 - portfolio and drawdown primitives
 - local CSV-backed store for development before PostgreSQL is available
 - testable local implementations for key MCP tools
+- local stdio MCP server for currently implemented deterministic tools
 - lazy Tushare and Akshare adapters with normalized outputs
 - local importers for daily bars and PIT financial indicators
+- upload learning loop first pass: text/Markdown parsing, chunking, dedupe, and proposal extraction
 
 Still pending:
 
 - live Tushare/Akshare adapters
 - PostgreSQL integration tests on TimescaleDB/pgvector
-- full MCP stdio wiring
+- production PostgreSQL-backed MCP service wiring and deployment verification
 - production Qlib expression integration
-- Telegram, upload learning loop, dashboard, and cognitive layer
+- Telegram, dashboard, report system, and full cognitive layer behavior

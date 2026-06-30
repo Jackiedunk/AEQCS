@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from typing import Any
+
+from mcp.server.fastmcp import FastMCP
 
 from aeqcs.core.json import to_jsonable
 from aeqcs.core.service import CoreService
@@ -14,8 +17,6 @@ def tool_manifest() -> list[dict[str, Any]]:
     return [
         {"name": "get_market_data", "requires_as_of": True},
         {"name": "get_financials", "requires_as_of": True},
-        {"name": "search_semantic_nodes", "requires_as_of": False},
-        {"name": "get_concept_stocks", "requires_as_of": False},
         {"name": "submit_proposal", "requires_as_of": False},
         {"name": "get_proposal_status", "requires_as_of": False},
         {"name": "review_proposal", "requires_as_of": False},
@@ -120,8 +121,161 @@ def call_local_tool(name: str, arguments: dict[str, Any], root: str = "data/loca
     raise ValueError(f"unsupported local tool: {name}")
 
 
-def main() -> None:
-    raise SystemExit(
-        "MCP transport wiring is intentionally left for the deployment host. "
-        "Use tool_manifest() as the contract while storage credentials are configured."
+def _root(default: str) -> str:
+    return os.environ.get("AEQCS_LOCAL_ROOT", default)
+
+
+def build_mcp_server(root: str = "data/local") -> FastMCP:
+    server = FastMCP(
+        "aeqcs-core",
+        instructions=(
+            "AEQCS deterministic core tools. All time-sensitive market and "
+            "factor queries require an explicit as_of_date."
+        ),
     )
+
+    @server.tool(description="Get latest market row for a symbol at an explicit as-of date.")
+    def get_market_data(symbol: str, as_of_date: str) -> dict[str, Any]:
+        return call_local_tool(
+            "get_market_data",
+            {"symbol": symbol, "as_of_date": as_of_date},
+            root=_root(root),
+        )
+
+    @server.tool(description="Get point-in-time financial indicators for a symbol and period.")
+    def get_financials(symbol: str, period: str, as_of_date: str) -> dict[str, Any]:
+        return call_local_tool(
+            "get_financials",
+            {"symbol": symbol, "period": period, "as_of_date": as_of_date},
+            root=_root(root),
+        )
+
+    @server.tool(description="Submit a proposed factor, correction, or strategy change to the gate.")
+    def submit_proposal(
+        kind: str,
+        payload: dict[str, Any],
+        source: str,
+        confidence: float,
+        snapshot_id: int | None = None,
+    ) -> int:
+        return call_local_tool(
+            "submit_proposal",
+            {
+                "kind": kind,
+                "payload": payload,
+                "source": source,
+                "confidence": confidence,
+                "snapshot_id": snapshot_id,
+            },
+            root=_root(root),
+        )
+
+    @server.tool(description="Get the gate status for a proposal.")
+    def get_proposal_status(proposal_id: int) -> dict[str, Any]:
+        return call_local_tool("get_proposal_status", {"proposal_id": proposal_id}, root=_root(root))
+
+    @server.tool(description="Review a proposal and advance it through the gate state machine.")
+    def review_proposal(
+        proposal_id: int,
+        status: str,
+        reviewed_by: str,
+        reason: str = "",
+        backtest_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return call_local_tool(
+            "review_proposal",
+            {
+                "proposal_id": proposal_id,
+                "status": status,
+                "reviewed_by": reviewed_by,
+                "reason": reason,
+                "backtest_result": backtest_result,
+            },
+            root=_root(root),
+        )
+
+    @server.tool(description="Run a deterministic daily backtest with explicit as-of protection.")
+    def run_backtest(
+        strategy_name: str,
+        start_date: str,
+        end_date: str,
+        parameters: dict[str, Any],
+        as_of_date: str,
+    ) -> dict[str, Any]:
+        return call_local_tool(
+            "run_backtest",
+            {
+                "strategy_name": strategy_name,
+                "start_date": start_date,
+                "end_date": end_date,
+                "parameters": parameters,
+                "as_of_date": as_of_date,
+            },
+            root=_root(root),
+        )
+
+    @server.tool(description="Get a persisted backtest report by id.")
+    def get_backtest_result(backtest_result_id: str) -> dict[str, Any]:
+        return call_local_tool(
+            "get_backtest_result",
+            {"backtest_result_id": backtest_result_id},
+            root=_root(root),
+        )
+
+    @server.tool(description="Compute supported deterministic factors and persist the values.")
+    def compute_factors(
+        factor_ids: list[str],
+        start_date: str,
+        end_date: str,
+        as_of_date: str,
+    ) -> list[dict[str, Any]]:
+        return call_local_tool(
+            "compute_factors",
+            {
+                "factor_ids": factor_ids,
+                "start_date": start_date,
+                "end_date": end_date,
+                "as_of_date": as_of_date,
+            },
+            root=_root(root),
+        )
+
+    @server.tool(description="Query persisted factor values with explicit as-of protection.")
+    def get_factor_values(
+        factor_ids: list[str],
+        start_date: str,
+        end_date: str,
+        as_of_date: str,
+    ) -> list[dict[str, Any]]:
+        return call_local_tool(
+            "get_factor_values",
+            {
+                "factor_ids": factor_ids,
+                "start_date": start_date,
+                "end_date": end_date,
+                "as_of_date": as_of_date,
+            },
+            root=_root(root),
+        )
+
+    @server.tool(description="Upload a text or Markdown document into the local inbox.")
+    def load_inbox(filename: str, content_base64: str, doc_type: str = "note") -> dict[str, Any]:
+        return call_local_tool(
+            "load_inbox",
+            {"filename": filename, "content_base64": content_base64, "doc_type": doc_type},
+            root=_root(root),
+        )
+
+    @server.tool(description="Get an uploaded document and its chunks by sha256.")
+    def get_uploaded_doc(sha256: str) -> dict[str, Any]:
+        return call_local_tool("get_uploaded_doc", {"sha256": sha256}, root=_root(root))
+
+    @server.tool(description="Return local AEQCS core health and registered tool names.")
+    def system_health() -> dict[str, Any]:
+        return call_local_tool("system_health", {}, root=_root(root))
+
+    return server
+
+
+def main() -> None:
+    build_mcp_server().run(transport="stdio")
