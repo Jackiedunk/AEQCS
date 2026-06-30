@@ -1,4 +1,5 @@
 from datetime import date
+import json
 
 import pandas as pd
 import pytest
@@ -39,7 +40,7 @@ def test_local_market_data_respects_as_of(tmp_path):
         root=str(tmp_path),
     )
 
-    assert row["date"] == date(2026, 1, 2)
+    assert row["date"] == "2026-01-02"
     assert row["close"] == 12
 
 
@@ -52,7 +53,7 @@ def test_local_financials_use_pit_slice(tmp_path):
         root=str(tmp_path),
     )
 
-    assert row["ann_date"] == date(2026, 1, 1)
+    assert row["ann_date"] == "2026-01-01"
     assert row["roe"] == 0.10
 
 
@@ -92,4 +93,38 @@ def test_local_backtest_and_factor_tools(tmp_path):
     )
 
     assert factor_rows
-    assert result["fills"][0]["date"] == date(2026, 1, 2)
+    assert result["fills"][0]["date"] == "2026-01-02"
+    json.dumps(result)
+
+
+def test_local_service_rejects_end_date_after_as_of(tmp_path):
+    seed_store(tmp_path)
+
+    with pytest.raises(LookAheadViolation):
+        call_local_tool(
+            "run_backtest",
+            {
+                "strategy_name": "buy_and_hold",
+                "start_date": "2026-01-01",
+                "end_date": "2026-01-05",
+                "as_of_date": "2026-01-02",
+                "parameters": {"symbol": "000001"},
+            },
+            root=str(tmp_path),
+        )
+
+
+def test_local_service_rejects_unknown_factor(tmp_path):
+    seed_store(tmp_path)
+
+    with pytest.raises(ValueError):
+        call_local_tool(
+            "compute_factors",
+            {
+                "factor_ids": ["unknown_factor"],
+                "start_date": "2026-01-01",
+                "end_date": "2026-01-02",
+                "as_of_date": "2026-01-02",
+            },
+            root=str(tmp_path),
+        )

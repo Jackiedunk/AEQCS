@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from aeqcs.core.versioning import require_as_of
+from aeqcs.core.versioning import assert_not_after, require_as_of
 from aeqcs.data.etl.financial_data import normalize_financial_frame, pit_slice
 from aeqcs.data.etl.market_data import normalize_daily_frame
 
@@ -64,6 +64,8 @@ class LocalStore:
         as_of_date: date | None = None,
     ) -> list[dict[str, Any]]:
         require_as_of(as_of_date)
+        if end_date is not None:
+            assert_not_after(end_date, as_of_date)
         frame = self.load_daily()
         if frame.empty:
             return []

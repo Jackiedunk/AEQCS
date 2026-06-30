@@ -7,16 +7,17 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from aeqcs.core.versioning import require_as_of
+from aeqcs.core.exceptions import DataSourceError
+from aeqcs.core.versioning import assert_not_after, require_as_of
 from aeqcs.factor.compute.technical import compute_panel_momentum
 from aeqcs.gate.proposals import Proposal
-from aeqcs.store.local import LocalStore
+from aeqcs.store.protocols import CoreStore
 from aeqcs.strategy.backtest.engine import run_daily_backtest
 from aeqcs.strategy.base import BuyAndHoldStrategy
 
 
 class CoreService:
-    def __init__(self, store: LocalStore) -> None:
+    def __init__(self, store: CoreStore) -> None:
         self.store = store
 
     def get_market_data(self, symbol: str, as_of_date: date) -> dict[str, Any]:
@@ -34,6 +35,11 @@ class CoreService:
         as_of_date: date,
     ) -> list[dict[str, Any]]:
         require_as_of(as_of_date)
+        assert_not_after(end_date, as_of_date)
+        supported = {"momentum_20d", "momentum_1d"}
+        unknown = set(factor_ids) - supported
+        if unknown:
+            raise ValueError(f"unsupported factor ids: {sorted(unknown)}")
         frame = self.store.load_daily()
         if frame.empty:
             return []
@@ -55,10 +61,13 @@ class CoreService:
         as_of_date: date,
     ) -> dict[str, Any]:
         require_as_of(as_of_date)
+        assert_not_after(end_date, as_of_date)
         if strategy_name != "buy_and_hold":
             raise ValueError(f"unsupported strategy: {strategy_name}")
         symbol = str(parameters["symbol"])
         rows = self.store.get_market_data(symbol, start_date, end_date, as_of_date)
+        if not rows:
+            raise DataSourceError(f"no market data for {symbol} between {start_date} and {end_date}")
         result = run_daily_backtest(
             rows,
             BuyAndHoldStrategy(symbol, float(parameters.get("target_weight", 1.0))),

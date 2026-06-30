@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from aeqcs.core.json import to_jsonable
 from aeqcs.core.service import CoreService
 from aeqcs.store.local import LocalStore
 
@@ -42,27 +43,33 @@ def call_local_tool(name: str, arguments: dict[str, Any], root: str = "data/loca
 
     service = local_service(root)
     if name == "get_market_data":
-        return service.get_market_data(arguments["symbol"], parse_date(arguments["as_of_date"]))
+        return to_jsonable(service.get_market_data(arguments["symbol"], parse_date(arguments["as_of_date"])))
     if name == "get_financials":
-        return service.get_financials(
-            arguments["symbol"],
-            arguments["period"],
-            parse_date(arguments["as_of_date"]),
+        return to_jsonable(
+            service.get_financials(
+                arguments["symbol"],
+                arguments["period"],
+                parse_date(arguments["as_of_date"]),
+            )
         )
     if name == "compute_factors":
-        return service.compute_factors(
-            list(arguments["factor_ids"]),
-            parse_date(arguments["start_date"]),
-            parse_date(arguments["end_date"]),
-            parse_date(arguments["as_of_date"]),
+        return to_jsonable(
+            service.compute_factors(
+                list(arguments["factor_ids"]),
+                parse_date(arguments["start_date"]),
+                parse_date(arguments["end_date"]),
+                parse_date(arguments["as_of_date"]),
+            )
         )
     if name == "run_backtest":
-        return service.run_backtest(
-            arguments["strategy_name"],
-            parse_date(arguments["start_date"]),
-            parse_date(arguments["end_date"]),
-            dict(arguments.get("parameters", {})),
-            parse_date(arguments["as_of_date"]),
+        return to_jsonable(
+            service.run_backtest(
+                arguments["strategy_name"],
+                parse_date(arguments["start_date"]),
+                parse_date(arguments["end_date"]),
+                dict(arguments.get("parameters", {})),
+                parse_date(arguments["as_of_date"]),
+            )
         )
     if name == "submit_proposal":
         return service.submit_proposal(
@@ -73,7 +80,7 @@ def call_local_tool(name: str, arguments: dict[str, Any], root: str = "data/loca
             arguments.get("snapshot_id"),
         )
     if name == "get_proposal_status":
-        return service.get_proposal_status(int(arguments["proposal_id"]))
+        return to_jsonable(service.get_proposal_status(int(arguments["proposal_id"])))
     if name == "system_health":
         return {"status": "ok", "store": root, "tools": [tool["name"] for tool in tool_manifest()]}
     raise ValueError(f"unsupported local tool: {name}")
