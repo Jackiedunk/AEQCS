@@ -19,3 +19,7 @@ class RateLimitExceeded(AEQCSError):
 
 class ConfigurationError(AEQCSError):
     """Raised when runtime configuration is invalid."""
+
+
+class DataSourceError(AEQCSError):
+    """Raised when an external data source fails or returns an invalid payload."""

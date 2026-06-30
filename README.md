@@ -30,6 +30,12 @@ The MCP tool logic can also be exercised locally before PostgreSQL and stdio
 transport are configured. Use `aeqcs.core.mcp_server.call_local_tool` with a
 `LocalStore` rooted at a test or development data directory.
 
+To import real Tushare data into the local development store:
+
+```powershell
+python scripts/import_tushare_local.py --symbol 000001.SZ --start 2026-01-01 --end 2026-01-31 --token $env:TUSHARE_TOKEN
+```
+
 On the target Ubuntu host, use Python 3.11 and `uv`.
 
 ## Layout
@@ -67,6 +73,8 @@ Implemented:
 - portfolio and drawdown primitives
 - local CSV-backed store for development before PostgreSQL is available
 - testable local implementations for key MCP tools
+- lazy Tushare and Akshare adapters with normalized outputs
+- local importers for daily bars and PIT financial indicators
 
 Still pending:
 
