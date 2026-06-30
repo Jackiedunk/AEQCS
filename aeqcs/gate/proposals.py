@@ -4,9 +4,18 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Literal
 
 ProposalKind = Literal["catalyst", "edge", "signal", "factor", "theme", "correction"]
+
+
+class ProposalStatus(StrEnum):
+    PENDING = "pending"
+    BACKTESTED = "backtested"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PROMOTED = "promoted"
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +25,15 @@ class Proposal:
     source: str
     confidence: float
     snapshot_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalReview:
+    proposal_id: int
+    status: ProposalStatus
+    reviewed_by: str
+    reason: str = ""
+    backtest_result: dict[str, Any] | None = None
 
 
 async def submit_proposal(conn: Any, proposal: Proposal) -> int:
@@ -40,3 +58,7 @@ async def get_proposal_status(conn: Any, proposal_id: int) -> dict[str, Any]:
         proposal_id,
     )
     return {"status": row["status"], "result": row["backtest_result"]} if row else {}
+
+
+def normalize_status(status: str | ProposalStatus) -> ProposalStatus:
+    return status if isinstance(status, ProposalStatus) else ProposalStatus(status)

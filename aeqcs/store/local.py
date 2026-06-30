@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
@@ -12,6 +13,8 @@ import pandas as pd
 from aeqcs.core.versioning import assert_not_after, require_as_of
 from aeqcs.data.etl.financial_data import normalize_financial_frame, pit_slice
 from aeqcs.data.etl.market_data import normalize_daily_frame
+from aeqcs.gate.proposals import ProposalReview
+from aeqcs.gate.validator import assert_transition
 
 
 class LocalStore:
@@ -98,3 +101,24 @@ class LocalStore:
             return {}
         row = subset.iloc[-1].to_dict()
         return {"status": row.get("status", ""), "result": row}
+
+    def review_proposal(self, review: ProposalReview) -> dict[str, Any]:
+        if not self.proposals_path.exists():
+            return {}
+        frame = pd.read_csv(self.proposals_path)
+        mask = frame["proposal_id"] == review.proposal_id
+        if not mask.any():
+            return {}
+        current = str(frame.loc[mask, "status"].iloc[-1])
+        assert_transition(current, review.status)
+        frame.loc[mask, "status"] = review.status.value
+        frame.loc[mask, "reviewed_by"] = review.reviewed_by
+        frame.loc[mask, "review_reason"] = review.reason
+        if review.backtest_result is not None:
+            frame.loc[mask, "backtest_result"] = json.dumps(
+                review.backtest_result,
+                ensure_ascii=False,
+                default=str,
+            )
+        frame.to_csv(self.proposals_path, index=False)
+        return self.get_proposal_status(review.proposal_id)

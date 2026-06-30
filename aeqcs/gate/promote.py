@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from aeqcs.core.exceptions import GateBypassError
+from aeqcs.gate.proposals import ProposalStatus
 
 
 async def promote(conn: Any, proposal_id: int, reviewed_by: str) -> None:
     row = await conn.fetchrow("SELECT status FROM proposals WHERE proposal_id=$1", proposal_id)
-    if not row or row["status"] != "approved":
+    if not row or row["status"] != ProposalStatus.APPROVED:
         raise GateBypassError("only approved proposals can be promoted")
     await conn.execute(
         """

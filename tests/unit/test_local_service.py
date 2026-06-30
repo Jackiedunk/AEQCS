@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import pytest
 
-from aeqcs.core.exceptions import LookAheadViolation
+from aeqcs.core.exceptions import GateStateError, LookAheadViolation
 from aeqcs.core.mcp_server import call_local_tool
 from aeqcs.store.local import LocalStore
 
@@ -125,6 +125,51 @@ def test_local_service_rejects_unknown_factor(tmp_path):
                 "start_date": "2026-01-01",
                 "end_date": "2026-01-02",
                 "as_of_date": "2026-01-02",
+            },
+            root=str(tmp_path),
+        )
+
+
+def test_local_proposal_gate_review_flow(tmp_path):
+    seed_store(tmp_path)
+
+    proposal_id = call_local_tool(
+        "submit_proposal",
+        {
+            "kind": "edge",
+            "payload": {"parent_id": "banking", "child_id": "000001", "relation_type": "contains"},
+            "source": "test",
+            "confidence": 0.8,
+        },
+        root=str(tmp_path),
+    )
+    status = call_local_tool(
+        "review_proposal",
+        {"proposal_id": proposal_id, "status": "approved", "reviewed_by": "tester"},
+        root=str(tmp_path),
+    )
+
+    assert status["status"] == "approved"
+
+    with pytest.raises(GateStateError):
+        call_local_tool(
+            "review_proposal",
+            {"proposal_id": proposal_id, "status": "rejected", "reviewed_by": "tester"},
+            root=str(tmp_path),
+        )
+
+
+def test_local_proposal_gate_rejects_invalid_payload(tmp_path):
+    seed_store(tmp_path)
+
+    with pytest.raises(ValueError):
+        call_local_tool(
+            "submit_proposal",
+            {
+                "kind": "edge",
+                "payload": {"parent_id": "banking"},
+                "source": "test",
+                "confidence": 0.8,
             },
             root=str(tmp_path),
         )

@@ -10,6 +10,8 @@ from typing import Any
 import pandas as pd
 
 from aeqcs.core.versioning import assert_not_after, require_as_of
+from aeqcs.gate.proposals import ProposalReview
+from aeqcs.gate.validator import assert_transition
 
 
 class PgCoreStore:
@@ -126,3 +128,27 @@ class PgCoreStore:
             """,
             proposal_id,
         )
+
+    async def review_proposal(self, review: ProposalReview) -> dict[str, Any]:
+        current = await self._fetchrow("SELECT status FROM proposals WHERE proposal_id=$1", review.proposal_id)
+        if not current:
+            return {}
+        assert_transition(current["status"], review.status)
+        await self._fetchval(
+            """
+            UPDATE proposals
+            SET status=$2,
+                reviewed_by=$3,
+                reviewed_ts=CURRENT_TIMESTAMP,
+                backtest_result=COALESCE($4::jsonb, backtest_result)
+            WHERE proposal_id=$1
+            RETURNING proposal_id
+            """,
+            review.proposal_id,
+            review.status.value,
+            review.reviewed_by,
+            json.dumps(review.backtest_result, ensure_ascii=False, default=str)
+            if review.backtest_result is not None
+            else None,
+        )
+        return await self.get_proposal_status(review.proposal_id)

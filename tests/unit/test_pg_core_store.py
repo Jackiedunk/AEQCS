@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from aeqcs.core.exceptions import LookAheadViolation
+from aeqcs.gate.proposals import ProposalReview, ProposalStatus
 from aeqcs.store.pg_core import PgCoreStore
 
 
@@ -16,6 +17,8 @@ class FakeConn:
 
     async def fetchrow(self, query, *args):
         self.calls.append(("fetchrow", query, args))
+        if "SELECT status FROM proposals" in query:
+            return {"status": "pending"}
         return None
 
     async def fetchval(self, query, *args):
@@ -73,3 +76,17 @@ async def test_pg_market_data_rejects_end_after_as_of():
             end_date=date(2026, 1, 3),
             as_of_date=date(2026, 1, 2),
         )
+
+
+@pytest.mark.asyncio
+async def test_pg_review_proposal_updates_status():
+    pool = FakePool()
+    store = PgCoreStore(pool)
+
+    await store.review_proposal(
+        ProposalReview(1, ProposalStatus.APPROVED, reviewed_by="tester", reason="ok")
+    )
+
+    calls = [call for call in pool.conn.calls if call[0] == "fetchval"]
+    assert calls
+    assert calls[-1][2][0:3] == (1, "approved", "tester")

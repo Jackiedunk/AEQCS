@@ -18,6 +18,7 @@ def tool_manifest() -> list[dict[str, Any]]:
         {"name": "get_concept_stocks", "requires_as_of": False},
         {"name": "submit_proposal", "requires_as_of": False},
         {"name": "get_proposal_status", "requires_as_of": False},
+        {"name": "review_proposal", "requires_as_of": False},
         {"name": "run_backtest", "requires_as_of": True},
         {"name": "get_backtest_result", "requires_as_of": False},
         {"name": "compute_factors", "requires_as_of": True},
@@ -81,6 +82,16 @@ def call_local_tool(name: str, arguments: dict[str, Any], root: str = "data/loca
         )
     if name == "get_proposal_status":
         return to_jsonable(service.get_proposal_status(int(arguments["proposal_id"])))
+    if name == "review_proposal":
+        return to_jsonable(
+            service.review_proposal(
+                int(arguments["proposal_id"]),
+                arguments["status"],
+                arguments["reviewed_by"],
+                arguments.get("reason", ""),
+                arguments.get("backtest_result"),
+            )
+        )
     if name == "system_health":
         return {"status": "ok", "store": root, "tools": [tool["name"] for tool in tool_manifest()]}
     raise ValueError(f"unsupported local tool: {name}")

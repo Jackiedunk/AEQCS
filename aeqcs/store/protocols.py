@@ -32,3 +32,6 @@ class CoreStore(Protocol):
 
     def get_proposal_status(self, proposal_id: int) -> dict[str, Any]:
         ...
+
+    def review_proposal(self, review: Any) -> dict[str, Any]:
+        ...

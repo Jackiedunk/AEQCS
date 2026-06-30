@@ -10,7 +10,8 @@ from typing import Any
 from aeqcs.core.exceptions import DataSourceError
 from aeqcs.core.versioning import assert_not_after, require_as_of
 from aeqcs.factor.compute.technical import compute_panel_momentum
-from aeqcs.gate.proposals import Proposal
+from aeqcs.gate.proposals import Proposal, ProposalReview, ProposalStatus
+from aeqcs.gate.validator import validate_structure
 from aeqcs.store.protocols import CoreStore
 from aeqcs.strategy.backtest.engine import run_daily_backtest
 from aeqcs.strategy.base import BuyAndHoldStrategy
@@ -83,6 +84,9 @@ class CoreService:
         confidence: float,
         snapshot_id: int | None = None,
     ) -> int:
+        errors = validate_structure(kind, payload)
+        if errors:
+            raise ValueError("; ".join(errors))
         proposal = Proposal(
             kind=kind,
             payload=payload,
@@ -94,3 +98,20 @@ class CoreService:
 
     def get_proposal_status(self, proposal_id: int) -> dict[str, Any]:
         return self.store.get_proposal_status(proposal_id)
+
+    def review_proposal(
+        self,
+        proposal_id: int,
+        status: str,
+        reviewed_by: str,
+        reason: str = "",
+        backtest_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        review = ProposalReview(
+            proposal_id=proposal_id,
+            status=ProposalStatus(status),
+            reviewed_by=reviewed_by,
+            reason=reason,
+            backtest_result=backtest_result,
+        )
+        return self.store.review_proposal(review)
