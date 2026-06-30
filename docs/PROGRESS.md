@@ -9,7 +9,7 @@
 当前最后一个已确认推送到 GitHub 的提交是：
 
 ```text
-本进度文档所在提交：Add backtest execution costs and tradability
+本进度文档所在提交：Harden MCP stdio safety
 ```
 
 GitHub 仓库：
@@ -18,7 +18,7 @@ GitHub 仓库：
 https://github.com/Jackiedunk/AEQCS
 ```
 
-本次已把通过验证的“回测执行成本和基础可成交性”纳入提交并准备推送到 GitHub。
+本次已把通过验证的“MCP stdio 通道污染防护”和当前暂停点记录纳入提交并准备推送到 GitHub。
 
 ## 已完成并推送的阶段
 
@@ -270,13 +270,40 @@ f7289bf Persist backtest reports behind tool contract
 本进度文档所在提交：Add backtest execution costs and tradability
 ```
 
+### 15. MCP stdio 通道污染防护
+
+已完成：
+
+- 新增 `configure_stdio_safety()`
+- `aeqcs-mcp` 启动 stdio 服务前强制把 Python root logging 配置到 `stderr`
+- structlog 存在时改为 stdlib logger factory，避免默认 stdout 输出污染 MCP stdout
+- 新增 `_call_tool_safely()`，所有 MCP 工具调用都在 `redirect_stdout(sys.stderr)` 内执行
+- 防止业务代码、三方库或误用 `print()` 在工具执行期间写入 stdout
+- 保留 FastMCP/MCP transport 自己使用 stdout 发送 JSON-RPC 帧
+- 新增测试：模拟工具内部误写 stdout，验证 stdout 为空、噪声进入 stderr
+- 新增测试：验证 logging warning 不进入 stdout
+
+对应提交：
+
+```text
+本进度文档所在提交：Harden MCP stdio safety
+```
+
+## 五大核心风险当前处理状态
+
+1. stdio 通道污染：本次已做第一轮代码级防护和测试。MCP 工具执行期间 stdout 会重定向到 stderr，日志配置到 stderr。仍需后续做真实进程级 stdio 客户端握手测试。
+2. Qlib 强融 Pandas 内存爆仓：尚未处理。下一步应把因子计算边界明确为 DuckDB/Polars 优先，Qlib 仅做后置分析，并增加内存预算/禁止全市场 Pandas MultiIndex 强喂的测试或守卫。
+3. Qlib PIT 对齐前视漏洞：尚未处理。下一步应在 `data/qlib_adapter.py` 强制 as-of 快照生成，禁止多 vintage 财务数据直接进入 Qlib。
+4. PostgreSQL 高频写入表膨胀：尚未处理。下一步应补 `postgresql.conf` 表级 autovacuum 策略和夜间 VACUUM 维护脚本。
+5. 大模型 API 延迟阻塞核心层：尚未处理。下一步应为认知层调用建立异步队列/熔断器接口，保证 intraday 主循环不等待 LLM。
+
 ## 当前工作区状态
 
 本次推送前验证通过：
 
 ```text
 python -m pytest
-48 passed, 1 skipped
+50 passed, 1 skipped
 
 python -m compileall aeqcs tests scripts deploy
 passed
@@ -295,7 +322,7 @@ python -m compileall aeqcs tests scripts deploy
 当前推送前测试规模：
 
 ```text
-48 passed, 1 skipped
+50 passed, 1 skipped
 ```
 
 ## 重要技术约束和已守住的边界
@@ -313,6 +340,7 @@ python -m compileall aeqcs tests scripts deploy
 - 回测买入执行已支持手续费、最低费用、滑点和基础可成交性过滤
 - MCP 本地工具输出经过 JSON 安全转换
 - MCP stdio 服务已能注册并调用当前已实现工具
+- MCP 工具执行期间 stdout 已重定向到 stderr，降低 stdio JSON-RPC 通道污染风险
 - PostgreSQL 集成测试入口已建立，未配置 DSN 时默认跳过
 - 股票代码前导零在本地 CSV 中保留
 - 上传文件名拒绝路径穿越和非文本扩展名
@@ -323,7 +351,7 @@ python -m compileall aeqcs tests scripts deploy
 
 项目距离完整架构书仍有大量工作：
 
-- MCP stdio 本地工具服务已接通，但尚未接入生产 PG 连接配置和部署实测
+- MCP stdio 本地工具服务已接通并做了 stdout 污染防护，但尚未接入生产 PG 配置和真实 stdio 客户端握手测试
 - PG/TimescaleDB/pgvector 集成测试入口已建立，但尚未在目标主机真实数据库上执行验证
 - Tushare/Akshare 真实网络数据未跑通
 - Qlib 表达式引擎尚未真正接入生产因子管线
@@ -343,11 +371,11 @@ python -m compileall aeqcs tests scripts deploy
 
 恢复时建议进入以下顺序：
 
-1. 实现 semantic network 的本地/PG 节点边写入和查询
-2. 把上传提案接到闸门验证和晋升流程
-3. 接入生产 PG 配置下的 MCP 服务启动验证
-4. 在目标主机执行 `AEQCS_TEST_PG_DSN` 集成测试
-5. 继续扩展回测成交量约束、卖出执行和涨跌停细分规则
+1. 继续处理风险 2：禁止 Qlib 强融 Pandas 全市场大矩阵，明确 DuckDB/Polars 因子计算边界
+2. 处理风险 3：在 `data/qlib_adapter.py` 增加 as-of/PIT 快照对齐守卫
+3. 处理风险 4：补高频写入表 autovacuum/VACUUM 维护配置
+4. 处理风险 5：补认知层 LLM 异步队列和熔断器接口
+5. 对风险 1 做真实 MCP stdio 客户端握手级测试
 
 ## 说明
 

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+import sys
+import logging
+from contextlib import redirect_stdout
 from datetime import date
 from typing import Any
 
@@ -11,6 +14,22 @@ from mcp.server.fastmcp import FastMCP
 from aeqcs.core.json import to_jsonable
 from aeqcs.core.service import CoreService
 from aeqcs.store.local import LocalStore
+
+
+def configure_stdio_safety() -> None:
+    """Keep stdout reserved for MCP JSON-RPC frames in stdio mode."""
+
+    logging.basicConfig(level=os.environ.get("AEQCS_LOG_LEVEL", "INFO"), stream=sys.stderr, force=True)
+    try:
+        import structlog
+
+        structlog.configure(
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=True,
+        )
+    except ImportError:
+        return
 
 
 def tool_manifest() -> list[dict[str, Any]]:
@@ -125,6 +144,11 @@ def _root(default: str) -> str:
     return os.environ.get("AEQCS_LOCAL_ROOT", default)
 
 
+def _call_tool_safely(name: str, arguments: dict[str, Any], root: str) -> Any:
+    with redirect_stdout(sys.stderr):
+        return call_local_tool(name, arguments, root=root)
+
+
 def build_mcp_server(root: str = "data/local") -> FastMCP:
     server = FastMCP(
         "aeqcs-core",
@@ -136,7 +160,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
 
     @server.tool(description="Get latest market row for a symbol at an explicit as-of date.")
     def get_market_data(symbol: str, as_of_date: str) -> dict[str, Any]:
-        return call_local_tool(
+        return _call_tool_safely(
             "get_market_data",
             {"symbol": symbol, "as_of_date": as_of_date},
             root=_root(root),
@@ -144,7 +168,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
 
     @server.tool(description="Get point-in-time financial indicators for a symbol and period.")
     def get_financials(symbol: str, period: str, as_of_date: str) -> dict[str, Any]:
-        return call_local_tool(
+        return _call_tool_safely(
             "get_financials",
             {"symbol": symbol, "period": period, "as_of_date": as_of_date},
             root=_root(root),
@@ -158,7 +182,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
         confidence: float,
         snapshot_id: int | None = None,
     ) -> int:
-        return call_local_tool(
+        return _call_tool_safely(
             "submit_proposal",
             {
                 "kind": kind,
@@ -172,7 +196,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
 
     @server.tool(description="Get the gate status for a proposal.")
     def get_proposal_status(proposal_id: int) -> dict[str, Any]:
-        return call_local_tool("get_proposal_status", {"proposal_id": proposal_id}, root=_root(root))
+        return _call_tool_safely("get_proposal_status", {"proposal_id": proposal_id}, root=_root(root))
 
     @server.tool(description="Review a proposal and advance it through the gate state machine.")
     def review_proposal(
@@ -182,7 +206,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
         reason: str = "",
         backtest_result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return call_local_tool(
+        return _call_tool_safely(
             "review_proposal",
             {
                 "proposal_id": proposal_id,
@@ -202,7 +226,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
         parameters: dict[str, Any],
         as_of_date: str,
     ) -> dict[str, Any]:
-        return call_local_tool(
+        return _call_tool_safely(
             "run_backtest",
             {
                 "strategy_name": strategy_name,
@@ -216,7 +240,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
 
     @server.tool(description="Get a persisted backtest report by id.")
     def get_backtest_result(backtest_result_id: str) -> dict[str, Any]:
-        return call_local_tool(
+        return _call_tool_safely(
             "get_backtest_result",
             {"backtest_result_id": backtest_result_id},
             root=_root(root),
@@ -229,7 +253,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
         end_date: str,
         as_of_date: str,
     ) -> list[dict[str, Any]]:
-        return call_local_tool(
+        return _call_tool_safely(
             "compute_factors",
             {
                 "factor_ids": factor_ids,
@@ -247,7 +271,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
         end_date: str,
         as_of_date: str,
     ) -> list[dict[str, Any]]:
-        return call_local_tool(
+        return _call_tool_safely(
             "get_factor_values",
             {
                 "factor_ids": factor_ids,
@@ -260,7 +284,7 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
 
     @server.tool(description="Upload a text or Markdown document into the local inbox.")
     def load_inbox(filename: str, content_base64: str, doc_type: str = "note") -> dict[str, Any]:
-        return call_local_tool(
+        return _call_tool_safely(
             "load_inbox",
             {"filename": filename, "content_base64": content_base64, "doc_type": doc_type},
             root=_root(root),
@@ -268,14 +292,15 @@ def build_mcp_server(root: str = "data/local") -> FastMCP:
 
     @server.tool(description="Get an uploaded document and its chunks by sha256.")
     def get_uploaded_doc(sha256: str) -> dict[str, Any]:
-        return call_local_tool("get_uploaded_doc", {"sha256": sha256}, root=_root(root))
+        return _call_tool_safely("get_uploaded_doc", {"sha256": sha256}, root=_root(root))
 
     @server.tool(description="Return local AEQCS core health and registered tool names.")
     def system_health() -> dict[str, Any]:
-        return call_local_tool("system_health", {}, root=_root(root))
+        return _call_tool_safely("system_health", {}, root=_root(root))
 
     return server
 
 
 def main() -> None:
+    configure_stdio_safety()
     build_mcp_server().run(transport="stdio")
