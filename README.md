@@ -86,7 +86,7 @@ Implemented:
 - daily OHLCV quality checks
 - PIT financial slicing helpers
 - basic technical, fundamental, sentiment, and alternative factor helpers
-- deterministic long-only daily backtest with next-day-open execution
+- deterministic long-only daily backtest with next-day-open execution, basic fees, slippage, and buy-side tradability filters
 - portfolio and drawdown primitives
 - local CSV-backed store for development before PostgreSQL is available
 - testable local implementations for key MCP tools
@@ -102,4 +102,5 @@ Still pending:
 - live execution of the PostgreSQL integration tests against the target host
 - production PostgreSQL-backed MCP service wiring and deployment verification
 - production Qlib expression integration
+- fuller backtest execution model: sell-side execution, volume constraints, and finer limit-up/limit-down handling
 - Telegram, dashboard, report system, and full cognitive layer behavior

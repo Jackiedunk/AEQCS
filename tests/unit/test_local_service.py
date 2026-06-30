@@ -97,7 +97,13 @@ def test_local_backtest_and_factor_tools(tmp_path):
             "start_date": "2026-01-01",
             "end_date": "2026-01-05",
             "as_of_date": "2026-01-05",
-            "parameters": {"symbol": "000001", "initial_cash": "10000"},
+            "parameters": {
+                "symbol": "000001",
+                "initial_cash": "10000",
+                "fee_rate": "0.001",
+                "min_fee": "5",
+                "slippage_bps": "10",
+            },
         },
         root=str(tmp_path),
     )
@@ -112,6 +118,8 @@ def test_local_backtest_and_factor_tools(tmp_path):
     assert stored_factor_rows[0]["factor_id"] == "momentum_1d"
     assert stored_factor_rows[0]["date"] == "2026-01-02"
     assert result["fills"][0]["date"] == "2026-01-02"
+    assert result["fills"][0]["price"] == "11.011"
+    assert result["fills"][0]["fee"] == "9.909900"
     json.dumps(result)
 
 

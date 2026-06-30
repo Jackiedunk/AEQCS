@@ -21,6 +21,7 @@ from aeqcs.ingest.document_parser import (
 )
 from aeqcs.ingest.extractor import extract_proposals
 from aeqcs.store.protocols import AsyncCoreStore, CoreStore
+from aeqcs.strategy.backtest.execution import ExecutionConfig
 from aeqcs.strategy.backtest.engine import BacktestReport, run_daily_backtest
 from aeqcs.strategy.base import BuyAndHoldStrategy
 
@@ -158,6 +159,12 @@ class CoreService:
             rows,
             BuyAndHoldStrategy(symbol, float(parameters.get("target_weight", 1.0))),
             Decimal(str(parameters.get("initial_cash", "1000000"))),
+            ExecutionConfig(
+                fee_rate=Decimal(str(parameters.get("fee_rate", "0"))),
+                min_fee=Decimal(str(parameters.get("min_fee", "0"))),
+                slippage_bps=Decimal(str(parameters.get("slippage_bps", "0"))),
+                lot_size=int(parameters.get("lot_size", 100)),
+            ),
         )
         report_id = stable_hash(
             {

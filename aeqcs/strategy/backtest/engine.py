@@ -7,9 +7,16 @@ from datetime import date
 from decimal import Decimal
 from typing import Iterable
 
-from aeqcs.strategy.backtest.execution import Fill, shares_for_target
+from aeqcs.strategy.backtest.execution import (
+    ExecutionConfig,
+    Fill,
+    buy_fee,
+    buy_price_with_slippage,
+    shares_for_target,
+)
 from aeqcs.strategy.base import Signal, Strategy
 from aeqcs.strategy.portfolio import Portfolio
+from aeqcs.strategy.tradability import TradabilityInput, can_buy
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +51,9 @@ def run_daily_backtest(
     market_panel: Iterable[dict],
     strategy: Strategy,
     initial_cash: Decimal = Decimal("1000000"),
+    execution: ExecutionConfig | None = None,
 ) -> BacktestResult:
+    execution = execution or ExecutionConfig()
     rows = sorted(list(market_panel), key=lambda row: (row["date"], row["symbol"]))
     signals = strategy.generate_signals(rows)
     signals_by_date: dict[date, list[Signal]] = {}
@@ -67,10 +76,25 @@ def run_daily_backtest(
             execution_bar = next_bar.get((signal.symbol, current_date))
             if not execution_bar:
                 continue
-            price = Decimal(str(execution_bar["open"]))
-            quantity = shares_for_target(portfolio.cash, signal.target_weight, price)
+            if not _can_buy_bar(execution_bar):
+                continue
+            price = buy_price_with_slippage(Decimal(str(execution_bar["open"])), execution)
+            quantity = shares_for_target(
+                portfolio.cash,
+                signal.target_weight,
+                price,
+                lot_size=execution.lot_size,
+                fee_rate=execution.fee_rate,
+                min_fee=execution.min_fee,
+            )
             if quantity > 0:
-                fill = Fill(execution_bar["date"], signal.symbol, quantity, price)
+                fill = Fill(
+                    execution_bar["date"],
+                    signal.symbol,
+                    quantity,
+                    price,
+                    buy_fee(quantity, price, execution),
+                )
                 pending_fills.setdefault(fill.date, []).append(fill)
 
         close_prices = {
@@ -79,3 +103,14 @@ def run_daily_backtest(
         nav.append((current_date, portfolio.market_value(close_prices)))
 
     return BacktestResult(fills=fills, nav=nav)
+
+
+def _can_buy_bar(row: dict) -> bool:
+    return can_buy(
+        TradabilityInput(
+            is_trading=bool(row.get("is_trading", True)),
+            is_suspend=bool(row.get("is_suspend", False)),
+            is_one_word_limit=bool(row.get("is_one_word_limit", False)),
+            bid_volume=int(row.get("bid_volume", 1)),
+        )
+    )

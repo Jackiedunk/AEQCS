@@ -9,7 +9,7 @@
 当前最后一个已确认推送到 GitHub 的提交是：
 
 ```text
-本进度文档所在提交：Add PostgreSQL integration test entrypoint
+本进度文档所在提交：Add backtest execution costs and tradability
 ```
 
 GitHub 仓库：
@@ -18,7 +18,7 @@ GitHub 仓库：
 https://github.com/Jackiedunk/AEQCS
 ```
 
-本次已把通过验证的“PostgreSQL 集成测试入口”纳入提交并准备推送到 GitHub。
+本次已把通过验证的“回测执行成本和基础可成交性”纳入提交并准备推送到 GitHub。
 
 ## 已完成并推送的阶段
 
@@ -251,13 +251,32 @@ f7289bf Persist backtest reports behind tool contract
 本进度文档所在提交：Add PostgreSQL integration test entrypoint
 ```
 
+### 14. 回测执行成本和基础可成交性
+
+已完成：
+
+- 增加 `ExecutionConfig`
+- 回测支持 `fee_rate`
+- 回测支持 `min_fee`
+- 回测支持买入方向 `slippage_bps`
+- 股数计算会把手续费纳入预算，避免费用导致现金超支
+- 回测接入基础买入可成交性过滤：`is_trading`、`is_suspend`、`is_one_word_limit`、`bid_volume`
+- `run_backtest` 工具参数支持 `fee_rate`、`min_fee`、`slippage_bps`、`lot_size`
+- 增加手续费/滑点、停牌、一字板、无买盘和服务层参数透传测试
+
+对应提交：
+
+```text
+本进度文档所在提交：Add backtest execution costs and tradability
+```
+
 ## 当前工作区状态
 
 本次推送前验证通过：
 
 ```text
 python -m pytest
-45 passed, 1 skipped
+48 passed, 1 skipped
 
 python -m compileall aeqcs tests scripts deploy
 passed
@@ -276,7 +295,7 @@ python -m compileall aeqcs tests scripts deploy
 当前推送前测试规模：
 
 ```text
-45 passed, 1 skipped
+48 passed, 1 skipped
 ```
 
 ## 重要技术约束和已守住的边界
@@ -291,6 +310,7 @@ python -m compileall aeqcs tests scripts deploy
 - `rejected/promoted` 是终态
 - `approved` 只能进入 `promoted`
 - 回测使用次日开盘成交
+- 回测买入执行已支持手续费、最低费用、滑点和基础可成交性过滤
 - MCP 本地工具输出经过 JSON 安全转换
 - MCP stdio 服务已能注册并调用当前已实现工具
 - PostgreSQL 集成测试入口已建立，未配置 DSN 时默认跳过
@@ -307,8 +327,8 @@ python -m compileall aeqcs tests scripts deploy
 - PG/TimescaleDB/pgvector 集成测试入口已建立，但尚未在目标主机真实数据库上执行验证
 - Tushare/Akshare 真实网络数据未跑通
 - Qlib 表达式引擎尚未真正接入生产因子管线
-- 回测仍是最小 buy-and-hold 框架
-- 执行模型、可成交性、手续费、滑点仍需扩展
+- 回测仍是最小 buy-and-hold 框架，尚未支持多策略组合和完整订单生命周期
+- 执行模型已支持基础手续费/滑点/买入可成交性，但卖出、涨跌停细分、成交量约束和撮合细节仍需扩展
 - Telegram 告警未实现
 - intraday 监听和 CEP 规则执行未实现
 - semantic network 的写入、搜索、递归树接口还很薄
@@ -323,11 +343,11 @@ python -m compileall aeqcs tests scripts deploy
 
 恢复时建议进入以下顺序：
 
-1. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
-2. 实现 semantic network 的本地/PG 节点边写入和查询
-3. 把上传提案接到闸门验证和晋升流程
-4. 接入生产 PG 配置下的 MCP 服务启动验证
-5. 在目标主机执行 `AEQCS_TEST_PG_DSN` 集成测试
+1. 实现 semantic network 的本地/PG 节点边写入和查询
+2. 把上传提案接到闸门验证和晋升流程
+3. 接入生产 PG 配置下的 MCP 服务启动验证
+4. 在目标主机执行 `AEQCS_TEST_PG_DSN` 集成测试
+5. 继续扩展回测成交量约束、卖出执行和涨跌停细分规则
 
 ## 说明
 
