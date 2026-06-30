@@ -24,6 +24,7 @@ def tool_manifest() -> list[dict[str, Any]]:
         {"name": "compute_factors", "requires_as_of": True},
         {"name": "get_factor_values", "requires_as_of": True},
         {"name": "load_inbox", "requires_as_of": False},
+        {"name": "get_uploaded_doc", "requires_as_of": False},
         {"name": "system_health", "requires_as_of": False},
     ]
 
@@ -54,6 +55,16 @@ def call_local_tool(name: str, arguments: dict[str, Any], root: str = "data/loca
                 parse_date(arguments["as_of_date"]),
             )
         )
+    if name == "load_inbox":
+        return to_jsonable(
+            service.load_inbox(
+                arguments["filename"],
+                arguments["content_base64"],
+                arguments.get("doc_type", "note"),
+            )
+        )
+    if name == "get_uploaded_doc":
+        return to_jsonable(service.get_uploaded_doc(arguments["sha256"]))
     if name == "compute_factors":
         return to_jsonable(
             service.compute_factors(

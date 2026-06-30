@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
 from aeqcs.core.exceptions import LookAheadViolation
 from aeqcs.gate.proposals import ProposalReview, ProposalStatus
+from aeqcs.ingest.document_parser import DocumentChunk, ParsedDocument
 from aeqcs.store.pg_core import PgCoreStore
 from aeqcs.strategy.backtest.engine import BacktestReport
 
@@ -156,3 +157,21 @@ async def test_pg_factor_values_upsert_and_query():
         date(2026, 1, 2),
         date(2026, 1, 2),
     )
+
+
+@pytest.mark.asyncio
+async def test_pg_save_uploaded_doc_replaces_chunks():
+    pool = FakePool()
+    store = PgCoreStore(pool)
+    document = ParsedDocument(
+        filename="note.md",
+        path="/tmp/note.md",
+        sha256="abc",
+        text="hello",
+        uploaded_ts=datetime(2026, 1, 1),
+    )
+
+    result = await store.save_uploaded_doc(document, [DocumentChunk("abc", 0, "hello")])
+
+    assert result == {"doc_id": 1, "sha256": "abc", "chunks": 1}
+    assert any(call[0] == "execute" and "DELETE FROM doc_chunks" in call[1] for call in pool.conn.calls)

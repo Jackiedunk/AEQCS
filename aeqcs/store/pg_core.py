@@ -12,6 +12,7 @@ import pandas as pd
 from aeqcs.core.versioning import assert_not_after, require_as_of
 from aeqcs.gate.proposals import ProposalReview
 from aeqcs.gate.validator import assert_transition
+from aeqcs.ingest.document_parser import DocumentChunk, ParsedDocument
 from aeqcs.store.protocols import AsyncCoreStore
 from aeqcs.strategy.backtest.engine import BacktestReport
 
@@ -240,3 +241,56 @@ class PgCoreStore(AsyncCoreStore):
             end_date,
             as_of_date,
         )
+
+    async def save_uploaded_doc(self, document: ParsedDocument, chunks: list[DocumentChunk]) -> dict[str, Any]:
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                doc_id = await conn.fetchval(
+                    """
+                    INSERT INTO uploaded_docs (uploaded_ts, filename, doc_type, path, sha256, status, meta)
+                    VALUES ($1, $2, $3, $4, $5, 'parsed', '{}'::jsonb)
+                    ON CONFLICT (sha256) DO UPDATE
+                    SET filename=EXCLUDED.filename
+                    RETURNING doc_id
+                    """,
+                    document.uploaded_ts,
+                    document.filename,
+                    document.doc_type,
+                    document.path,
+                    document.sha256,
+                )
+                await conn.execute("DELETE FROM doc_chunks WHERE doc_id=$1", doc_id)
+                for chunk in chunks:
+                    await conn.execute(
+                        """
+                        INSERT INTO doc_chunks (doc_id, seq, text, embed_model)
+                        VALUES ($1, $2, $3, NULL)
+                        """,
+                        doc_id,
+                        chunk.seq,
+                        chunk.text,
+                    )
+        return {"doc_id": int(doc_id), "sha256": document.sha256, "chunks": len(chunks)}
+
+    async def get_uploaded_doc(self, sha256: str) -> dict[str, Any]:
+        doc = await self._fetchrow(
+            """
+            SELECT doc_id, uploaded_ts, filename, doc_type, path, sha256, status, meta
+            FROM uploaded_docs
+            WHERE sha256=$1
+            """,
+            sha256,
+        )
+        if not doc:
+            return {}
+        chunks = await self._fetch(
+            """
+            SELECT seq, text
+            FROM doc_chunks
+            WHERE doc_id=$1
+            ORDER BY seq
+            """,
+            doc["doc_id"],
+        )
+        doc["chunks"] = chunks
+        return doc

@@ -54,6 +54,12 @@ class CoreStore(Protocol):
     ) -> list[dict[str, Any]]:
         ...
 
+    def save_uploaded_doc(self, document: Any, chunks: list[Any]) -> dict[str, Any]:
+        ...
+
+    def get_uploaded_doc(self, sha256: str) -> dict[str, Any]:
+        ...
+
 
 class AsyncCoreStore(Protocol):
     async def load_daily(self) -> pd.DataFrame:
@@ -104,4 +110,10 @@ class AsyncCoreStore(Protocol):
         end_date: date,
         as_of_date: date,
     ) -> list[dict[str, Any]]:
+        ...
+
+    async def save_uploaded_doc(self, document: Any, chunks: list[Any]) -> dict[str, Any]:
+        ...
+
+    async def get_uploaded_doc(self, sha256: str) -> dict[str, Any]:
         ...

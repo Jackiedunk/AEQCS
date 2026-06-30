@@ -15,6 +15,7 @@ from aeqcs.data.etl.financial_data import normalize_financial_frame, pit_slice
 from aeqcs.data.etl.market_data import normalize_daily_frame
 from aeqcs.gate.proposals import ProposalReview
 from aeqcs.gate.validator import assert_transition
+from aeqcs.ingest.document_parser import DocumentChunk, ParsedDocument
 from aeqcs.strategy.backtest.engine import BacktestReport
 
 
@@ -29,6 +30,8 @@ class LocalStore:
         self.proposals_path = self.root / "proposals.csv"
         self.backtest_results_path = self.root / "backtest_results.csv"
         self.factor_values_path = self.root / "factor_values.csv"
+        self.docs_path = self.root / "uploaded_docs.csv"
+        self.chunks_path = self.root / "doc_chunks.csv"
 
     def load_daily(self) -> pd.DataFrame:
         if not self.daily_path.exists():
@@ -209,3 +212,64 @@ class LocalStore:
         subset["date"] = subset["date"].map(lambda value: value.isoformat())
         subset["calc_timestamp"] = subset["calc_timestamp"].map(lambda value: value.isoformat())
         return subset.to_dict("records")
+
+    def save_uploaded_doc(self, document: ParsedDocument, chunks: list[DocumentChunk]) -> dict[str, Any]:
+        docs = (
+            pd.read_csv(self.docs_path, dtype={"sha256": str})
+            if self.docs_path.exists()
+            else pd.DataFrame()
+        )
+        existing = docs[docs["sha256"] == document.sha256] if not docs.empty else pd.DataFrame()
+        if existing.empty:
+            doc_id = int(docs["doc_id"].max() + 1) if not docs.empty else 1
+            row = {
+                "doc_id": doc_id,
+                "uploaded_ts": document.uploaded_ts.isoformat(),
+                "filename": document.filename,
+                "doc_type": document.doc_type,
+                "path": document.path,
+                "sha256": document.sha256,
+                "status": "parsed",
+                "meta": "{}",
+            }
+            docs = pd.concat([docs, pd.DataFrame([row])], ignore_index=True)
+            docs.to_csv(self.docs_path, index=False)
+        else:
+            doc_id = int(existing.iloc[-1]["doc_id"])
+
+        chunk_rows = [
+            {"doc_id": doc_id, "doc_sha256": chunk.doc_sha256, "seq": chunk.seq, "text": chunk.text}
+            for chunk in chunks
+        ]
+        existing_chunks = (
+            pd.read_csv(self.chunks_path, dtype={"doc_sha256": str})
+            if self.chunks_path.exists()
+            else pd.DataFrame()
+        )
+        if chunk_rows:
+            merged_chunks = pd.concat([existing_chunks, pd.DataFrame(chunk_rows)], ignore_index=True)
+            merged_chunks = merged_chunks.drop_duplicates(["doc_sha256", "seq"], keep="last")
+            merged_chunks.to_csv(self.chunks_path, index=False)
+        elif not self.chunks_path.exists():
+            pd.DataFrame(columns=["doc_id", "doc_sha256", "seq", "text"]).to_csv(self.chunks_path, index=False)
+
+        return {"doc_id": doc_id, "sha256": document.sha256, "chunks": len(chunks)}
+
+    def get_uploaded_doc(self, sha256: str) -> dict[str, Any]:
+        if not self.docs_path.exists():
+            return {}
+        docs = pd.read_csv(self.docs_path, dtype={"sha256": str})
+        subset = docs[docs["sha256"] == sha256]
+        if subset.empty:
+            return {}
+        row = subset.iloc[-1].to_dict()
+        chunks = []
+        if self.chunks_path.exists():
+            chunk_frame = pd.read_csv(self.chunks_path, dtype={"doc_sha256": str})
+            chunks = (
+                chunk_frame[chunk_frame["doc_sha256"] == sha256]
+                .sort_values("seq")[["seq", "text"]]
+                .to_dict("records")
+            )
+        row["chunks"] = chunks
+        return row
