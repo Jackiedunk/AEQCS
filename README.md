@@ -20,6 +20,12 @@ python -m venv .venv
 .\.venv\Scripts\python -m pytest
 ```
 
+Run the deterministic smoke backtest without external data:
+
+```powershell
+python -m aeqcs.runtime.batch smoke
+```
+
 On the target Ubuntu host, use Python 3.11 and `uv`.
 
 ## Layout
@@ -44,3 +50,22 @@ tests/        unit and look-ahead tests
 - Cognitive output may only enter the core as proposals.
 - Backtests execute against data known at the decision time.
 - Intraday monitoring is alert-only; no automatic intraday execution.
+
+## Current Development Status
+
+Implemented:
+
+- canonical daily bar and financial indicator records
+- daily OHLCV quality checks
+- PIT financial slicing helpers
+- basic technical, fundamental, sentiment, and alternative factor helpers
+- deterministic long-only daily backtest with next-day-open execution
+- portfolio and drawdown primitives
+
+Still pending:
+
+- live Tushare/Akshare adapters
+- PostgreSQL integration tests on TimescaleDB/pgvector
+- full MCP stdio wiring
+- production Qlib expression integration
+- Telegram, upload learning loop, dashboard, and cognitive layer

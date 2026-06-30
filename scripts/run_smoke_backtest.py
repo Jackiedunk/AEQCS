@@ -1,8 +1,7 @@
-"""Batch task entrypoint."""
+"""Run a tiny deterministic backtest against built-in sample rows."""
 
 from __future__ import annotations
 
-import argparse
 from dataclasses import asdict
 from datetime import date
 from decimal import Decimal
@@ -11,7 +10,7 @@ from aeqcs.strategy.backtest.engine import run_daily_backtest
 from aeqcs.strategy.base import BuyAndHoldStrategy
 
 
-def run_smoke() -> None:
+def main() -> None:
     panel = [
         {"symbol": "000001", "date": date(2026, 1, 1), "open": "10", "close": "10"},
         {"symbol": "000001", "date": date(2026, 1, 2), "open": "11", "close": "12"},
@@ -19,16 +18,6 @@ def run_smoke() -> None:
     ]
     result = run_daily_backtest(panel, BuyAndHoldStrategy("000001"), Decimal("1000000"))
     print({"fills": [asdict(fill) for fill in result.fills], "nav": result.nav})
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(prog="aeqcs-batch")
-    parser.add_argument("job", nargs="?", default="smoke", choices=["smoke", "pre", "eod", "night"])
-    args = parser.parse_args()
-    if args.job == "smoke":
-        run_smoke()
-        return
-    print(f"AEQCS batch job '{args.job}' is not wired to production storage yet")
 
 
 if __name__ == "__main__":
