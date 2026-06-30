@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aeqcs"
+version = "0.1.0"
+description = "Deterministic core scaffold for AEQCS"
+requires-python = ">=3.11"
+dependencies = [
+  "asyncpg>=0.29",
+  "duckdb>=1.0",
+  "mcp>=1.0",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "polars>=1.0",
+  "pyarrow>=15.0",
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+  "sqlalchemy[asyncio]>=2.0",
+  "structlog>=24.1",
+]
+
+[project.optional-dependencies]
+qlib = ["pyqlib>=0.9.5"]
+data = ["akshare", "tushare", "sentence-transformers", "scipy", "cvxpy", "scikit-learn"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.5", "mypy>=1.10"]
+
+[project.scripts]
+aeqcs-mcp = "aeqcs.core.mcp_server:main"
+aeqcs-batch = "aeqcs.runtime.batch:main"
+aeqcs-intraday = "aeqcs.runtime.intraday:main"
+
+[tool.setuptools.packages.find]
+include = ["aeqcs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -1,0 +1,22 @@
+factors:
+  - id: momentum_20d
+    category: technical
+    qlib_expr: "Ref($close, 20) / $close - 1"
+    preprocess: [winsorize, industry_neutralize, zscore]
+  - id: roe_quarterly
+    category: fundamental
+    compute: financials.roe
+    align: ann_date
+    update_freq: quarterly
+  - id: north_flow_5d
+    category: moneyflow
+    compute: "sum(moneyflow.net_inflow,5)/market_cap"
+    preprocess: [winsorize, sector_neutralize]
+  - id: news_sentiment_1d
+    category: sentiment
+    compute: "mean(news.sentiment, last 1 day)"
+    preprocess: [zscore]
+  - id: concept_heat
+    category: alternative
+    compute: "concept.news_frequency*concept.price_correlation"
+    update_freq: daily

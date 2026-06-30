@@ -1,0 +1,38 @@
+paths:
+  data_root: /data/aeqcs
+  docs: /data/aeqcs/docs
+  inbox: /data/aeqcs/inbox
+  parquet: /data/aeqcs/parquet
+  duckdb_tmp: /data/aeqcs/duckdb_tmp
+database:
+  core:
+    url: postgresql+asyncpg://aeqcs_core:CHANGE_ME@localhost/aeqcs
+    pool_size: 8
+  cognitive:
+    url: postgresql+asyncpg://aeqcs_cog:CHANGE_ME@localhost/aeqcs
+    pool_size: 4
+duckdb:
+  memory_limit: 4GB
+  threads: 6
+  temp: /data/aeqcs/duckdb_tmp
+qlib:
+  provider_uri: ./qlib_data
+  mount_parquet: true
+memory:
+  batch_chunk_symbols: 500
+llm:
+  provider: api
+  model: CHANGE_ME
+  max_retries: 3
+  cache: true
+embedding:
+  model: bge-base-zh
+  device: cpu
+  batch: 64
+thresholds:
+  spike_pct: 0.05
+  drawdown_warn: 0.05
+  drawdown_red: 0.10
+  factor_ic_min: 0.02
+  proposal_conf_min: 0.6
+trading_calendar: tushare

@@ -1,0 +1,25 @@
+rules:
+  - id: sudden_spike
+    condition: "abs(e.close/e.pre_close-1)>0.05"
+    action: market_observer.analyze_spike
+    priority: urgent
+  - id: s_level_news
+    condition: "e.level=='S'"
+    action: market_observer.catalyst_mapping
+    priority: urgent
+  - id: limit_up_open
+    condition: "e.tick_status=='OPEN' and abs(e.close-e.high_limit)<1e-3"
+    action: market_observer.limit_alert
+    priority: important
+  - id: sector_linkage
+    condition: "count(events[same_concept].change_pct>0.03, 5min)>=3"
+    action: market_observer.sector_alert
+    priority: important
+  - id: volume_breakout
+    condition: "e.volume>3*rolling_mean(e.volume,20)"
+    action: market_observer.volume_alert
+    priority: important
+  - id: portfolio_drawdown
+    condition: "portfolio.drawdown>0.05"
+    action: risk_officer.analyze_drawdown
+    priority: urgent

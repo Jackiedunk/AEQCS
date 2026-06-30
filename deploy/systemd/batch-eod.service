@@ -1,0 +1,7 @@
+[Unit]
+Description=AEQCS end-of-day batch
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/aeqcs
+ExecStart=/opt/aeqcs/.venv/bin/python -m aeqcs.runtime.batch eod

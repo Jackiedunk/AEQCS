@@ -1,0 +1,25 @@
+rate_limits:
+  tushare:
+    burst: 5
+    per_second: 3
+  akshare:
+    burst: 2
+    per_second: 0.5
+    cooldown_after_fail: 1800
+  scrapling:
+    burst: 1
+    per_second: 0.2
+    max_daily: 1000
+    respect_robots: true
+    cache_ttl: 3600
+sources:
+  daily: tushare
+  financial: tushare
+  concept: akshare
+  news:
+    - scrapling
+    - akshare
+  minute: tushare
+compliance:
+  scrape_third_party_curated_products: false
+tushare_token: ${TUSHARE_TOKEN}
