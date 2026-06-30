@@ -9,7 +9,7 @@
 当前最后一个已确认推送到 GitHub 的提交是：
 
 ```text
-本进度文档所在提交：Harden MCP stdio safety
+本进度文档所在提交：Add AEQCS v2 architecture blueprint
 ```
 
 GitHub 仓库：
@@ -18,7 +18,7 @@ GitHub 仓库：
 https://github.com/Jackiedunk/AEQCS
 ```
 
-本次已把通过验证的“MCP stdio 通道污染防护”和当前暂停点记录纳入提交并准备推送到 GitHub。
+本次按用户要求把 AEQCS v2 核心架构书纳入仓库，并在 README 与进度文档中记录入口。
 
 ## 已完成并推送的阶段
 
@@ -287,6 +287,21 @@ f7289bf Persist backtest reports behind tool contract
 
 ```text
 本进度文档所在提交：Harden MCP stdio safety
+```
+
+### 16. AEQCS v2 核心架构书入库
+
+已完成：
+
+- 新增 [docs/AEQCS_ARCHITECTURE_V2.md](AEQCS_ARCHITECTURE_V2.md)
+- 架构书正文从 `# AEQCS 完整开发架构书 v2` 开始保存，去掉粘贴附件头部说明
+- README 增加核心蓝图入口
+- 本次未改变运行时代码逻辑
+
+对应提交：
+
+```text
+本进度文档所在提交：Add AEQCS v2 architecture blueprint
 ```
 
 ## 五大核心风险当前处理状态

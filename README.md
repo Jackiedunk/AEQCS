@@ -10,6 +10,8 @@ The repository follows the v2 architecture:
 - Qlib integration where it reduces wheel reinvention, without letting Qlib own the authoritative data path
 - MCP stdio server as the boundary exposed to the cognitive layer
 
+Core blueprint: [docs/AEQCS_ARCHITECTURE_V2.md](docs/AEQCS_ARCHITECTURE_V2.md).
+
 This scaffold implements the first development stage from the architecture document: project layout, core event schemas, look-ahead guards, storage wrappers, configuration, database bootstrap, factor/backtest interfaces, proposal gate primitives, and smoke tests.
 
 ## Quick Start
