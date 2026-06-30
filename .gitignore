@@ -9,6 +9,7 @@ __pycache__/
 *.egg-info/
 .env
 data/postgres/
+data/local*/
 data/parquet/
 data/duckdb_tmp/
 data/models/

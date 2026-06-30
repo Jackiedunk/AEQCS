@@ -26,6 +26,10 @@ Run the deterministic smoke backtest without external data:
 python -m aeqcs.runtime.batch smoke
 ```
 
+The MCP tool logic can also be exercised locally before PostgreSQL and stdio
+transport are configured. Use `aeqcs.core.mcp_server.call_local_tool` with a
+`LocalStore` rooted at a test or development data directory.
+
 On the target Ubuntu host, use Python 3.11 and `uv`.
 
 ## Layout
@@ -61,6 +65,8 @@ Implemented:
 - basic technical, fundamental, sentiment, and alternative factor helpers
 - deterministic long-only daily backtest with next-day-open execution
 - portfolio and drawdown primitives
+- local CSV-backed store for development before PostgreSQL is available
+- testable local implementations for key MCP tools
 
 Still pending:
 
