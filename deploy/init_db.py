@@ -155,6 +155,18 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshot (
   nav DECIMAL(20,4), drawdown DECIMAL(8,4)
 );
 
+CREATE TABLE IF NOT EXISTS backtest_results (
+  backtest_result_id VARCHAR(64) PRIMARY KEY,
+  strategy_name VARCHAR(100),
+  start_date DATE,
+  end_date DATE,
+  as_of_date DATE,
+  parameters JSONB,
+  fills JSONB,
+  nav JSONB,
+  created_ts TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS event_log (
   event_id VARCHAR(100) PRIMARY KEY, channel VARCHAR(100), payload JSONB, created_ts TIMESTAMP
 );

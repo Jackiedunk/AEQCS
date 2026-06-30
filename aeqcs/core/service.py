@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
 from aeqcs.core.exceptions import DataSourceError
-from aeqcs.core.versioning import assert_not_after, require_as_of
+from aeqcs.core.versioning import assert_not_after, require_as_of, stable_hash
 from aeqcs.factor.compute.technical import compute_panel_momentum
 from aeqcs.gate.proposals import Proposal, ProposalReview, ProposalStatus
 from aeqcs.gate.validator import validate_structure
 from aeqcs.store.protocols import CoreStore
-from aeqcs.strategy.backtest.engine import run_daily_backtest
+from aeqcs.strategy.backtest.engine import BacktestReport, run_daily_backtest
 from aeqcs.strategy.base import BuyAndHoldStrategy
 
 
@@ -74,7 +73,29 @@ class CoreService:
             BuyAndHoldStrategy(symbol, float(parameters.get("target_weight", 1.0))),
             Decimal(str(parameters.get("initial_cash", "1000000"))),
         )
-        return {"fills": [asdict(fill) for fill in result.fills], "nav": result.nav}
+        report_id = stable_hash(
+            {
+                "strategy_name": strategy_name,
+                "start_date": start_date,
+                "end_date": end_date,
+                "as_of_date": as_of_date,
+                "parameters": parameters,
+            }
+        )
+        report = BacktestReport(
+            backtest_result_id=report_id,
+            strategy_name=strategy_name,
+            start_date=start_date,
+            end_date=end_date,
+            as_of_date=as_of_date,
+            parameters=parameters,
+            fills=result.fills,
+            nav=result.nav,
+        )
+        return {"backtest_result_id": self.store.save_backtest_result(report)}
+
+    def get_backtest_result(self, backtest_result_id: str) -> dict[str, Any]:
+        return self.store.get_backtest_result(backtest_result_id)
 
     def submit_proposal(
         self,

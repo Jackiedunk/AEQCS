@@ -5,6 +5,7 @@ import pytest
 from aeqcs.core.exceptions import LookAheadViolation
 from aeqcs.gate.proposals import ProposalReview, ProposalStatus
 from aeqcs.store.pg_core import PgCoreStore
+from aeqcs.strategy.backtest.engine import BacktestReport
 
 
 class FakeConn:
@@ -90,3 +91,27 @@ async def test_pg_review_proposal_updates_status():
     calls = [call for call in pool.conn.calls if call[0] == "fetchval"]
     assert calls
     assert calls[-1][2][0:3] == (1, "approved", "tester")
+
+
+@pytest.mark.asyncio
+async def test_pg_save_backtest_result_upserts_report():
+    pool = FakePool()
+    store = PgCoreStore(pool)
+
+    report = BacktestReport(
+        backtest_result_id="abc",
+        strategy_name="buy_and_hold",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 2),
+        as_of_date=date(2026, 1, 2),
+        parameters={"symbol": "000001"},
+        fills=[],
+        nav=[],
+    )
+    result_id = await store.save_backtest_result(report)
+
+    assert result_id == "abc"
+    kind, query, args = pool.conn.calls[-1]
+    assert kind == "fetchval"
+    assert "INSERT INTO backtest_results" in query
+    assert args[0] == "abc"

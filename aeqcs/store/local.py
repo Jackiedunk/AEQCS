@@ -15,6 +15,7 @@ from aeqcs.data.etl.financial_data import normalize_financial_frame, pit_slice
 from aeqcs.data.etl.market_data import normalize_daily_frame
 from aeqcs.gate.proposals import ProposalReview
 from aeqcs.gate.validator import assert_transition
+from aeqcs.strategy.backtest.engine import BacktestReport
 
 
 class LocalStore:
@@ -26,6 +27,7 @@ class LocalStore:
         self.daily_path = self.root / "stock_daily_origin.csv"
         self.financial_path = self.root / "financial_indicators.csv"
         self.proposals_path = self.root / "proposals.csv"
+        self.backtest_results_path = self.root / "backtest_results.csv"
 
     def load_daily(self) -> pd.DataFrame:
         if not self.daily_path.exists():
@@ -122,3 +124,43 @@ class LocalStore:
             )
         frame.to_csv(self.proposals_path, index=False)
         return self.get_proposal_status(review.proposal_id)
+
+    def save_backtest_result(self, report: BacktestReport) -> str:
+        payload = {
+            "backtest_result_id": report.backtest_result_id,
+            "strategy_name": report.strategy_name,
+            "start_date": report.start_date.isoformat(),
+            "end_date": report.end_date.isoformat(),
+            "as_of_date": report.as_of_date.isoformat(),
+            "parameters": json.dumps(report.parameters, ensure_ascii=False, default=str),
+            "fills": json.dumps([asdict(fill) for fill in report.fills], ensure_ascii=False, default=str),
+            "nav": json.dumps(report.nav, ensure_ascii=False, default=str),
+        }
+        existing = (
+            pd.read_csv(self.backtest_results_path, dtype={"backtest_result_id": str})
+            if self.backtest_results_path.exists()
+            else pd.DataFrame()
+        )
+        merged = pd.concat([existing, pd.DataFrame([payload])], ignore_index=True)
+        merged = merged.drop_duplicates(["backtest_result_id"], keep="last")
+        merged.to_csv(self.backtest_results_path, index=False)
+        return report.backtest_result_id
+
+    def get_backtest_result(self, backtest_result_id: str) -> dict[str, Any]:
+        if not self.backtest_results_path.exists():
+            return {}
+        frame = pd.read_csv(self.backtest_results_path, dtype={"backtest_result_id": str})
+        subset = frame[frame["backtest_result_id"] == backtest_result_id]
+        if subset.empty:
+            return {}
+        row = subset.iloc[-1].to_dict()
+        return {
+            "backtest_result_id": row["backtest_result_id"],
+            "strategy_name": row["strategy_name"],
+            "start_date": row["start_date"],
+            "end_date": row["end_date"],
+            "as_of_date": row["as_of_date"],
+            "parameters": json.loads(row["parameters"]),
+            "fills": json.loads(row["fills"]),
+            "nav": json.loads(row["nav"]),
+        }

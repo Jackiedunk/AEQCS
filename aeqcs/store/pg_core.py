@@ -12,9 +12,11 @@ import pandas as pd
 from aeqcs.core.versioning import assert_not_after, require_as_of
 from aeqcs.gate.proposals import ProposalReview
 from aeqcs.gate.validator import assert_transition
+from aeqcs.store.protocols import AsyncCoreStore
+from aeqcs.strategy.backtest.engine import BacktestReport
 
 
-class PgCoreStore:
+class PgCoreStore(AsyncCoreStore):
     """CoreStore implementation backed by asyncpg connection pools."""
 
     def __init__(self, pool: Any) -> None:
@@ -152,3 +154,39 @@ class PgCoreStore:
             else None,
         )
         return await self.get_proposal_status(review.proposal_id)
+
+    async def save_backtest_result(self, report: BacktestReport) -> str:
+        await self._fetchval(
+            """
+            INSERT INTO backtest_results (
+              backtest_result_id, strategy_name, start_date, end_date, as_of_date,
+              parameters, fills, nav, created_ts
+            )
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, CURRENT_TIMESTAMP)
+            ON CONFLICT (backtest_result_id) DO UPDATE
+            SET parameters=EXCLUDED.parameters,
+                fills=EXCLUDED.fills,
+                nav=EXCLUDED.nav
+            RETURNING backtest_result_id
+            """,
+            report.backtest_result_id,
+            report.strategy_name,
+            report.start_date,
+            report.end_date,
+            report.as_of_date,
+            json.dumps(report.parameters, ensure_ascii=False, default=str),
+            json.dumps([asdict(fill) for fill in report.fills], ensure_ascii=False, default=str),
+            json.dumps(report.nav, ensure_ascii=False, default=str),
+        )
+        return report.backtest_result_id
+
+    async def get_backtest_result(self, backtest_result_id: str) -> dict[str, Any]:
+        return await self._fetchrow(
+            """
+            SELECT backtest_result_id, strategy_name, start_date, end_date, as_of_date,
+                   parameters, fills, nav, created_ts
+            FROM backtest_results
+            WHERE backtest_result_id=$1
+            """,
+            backtest_result_id,
+        )

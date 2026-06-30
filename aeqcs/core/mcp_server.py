@@ -72,6 +72,8 @@ def call_local_tool(name: str, arguments: dict[str, Any], root: str = "data/loca
                 parse_date(arguments["as_of_date"]),
             )
         )
+    if name == "get_backtest_result":
+        return to_jsonable(service.get_backtest_result(arguments["backtest_result_id"]))
     if name == "submit_proposal":
         return service.submit_proposal(
             arguments["kind"],

@@ -80,7 +80,7 @@ def test_local_backtest_and_factor_tools(tmp_path):
         },
         root=str(tmp_path),
     )
-    result = call_local_tool(
+    run_result = call_local_tool(
         "run_backtest",
         {
             "strategy_name": "buy_and_hold",
@@ -89,6 +89,11 @@ def test_local_backtest_and_factor_tools(tmp_path):
             "as_of_date": "2026-01-05",
             "parameters": {"symbol": "000001", "initial_cash": "10000"},
         },
+        root=str(tmp_path),
+    )
+    result = call_local_tool(
+        "get_backtest_result",
+        {"backtest_result_id": run_result["backtest_result_id"]},
         root=str(tmp_path),
     )
 

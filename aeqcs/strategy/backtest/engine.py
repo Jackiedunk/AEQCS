@@ -18,6 +18,18 @@ class BacktestResult:
     nav: list[tuple[date, Decimal]]
 
 
+@dataclass(frozen=True, slots=True)
+class BacktestReport:
+    backtest_result_id: str
+    strategy_name: str
+    start_date: date
+    end_date: date
+    as_of_date: date
+    parameters: dict
+    fills: list[Fill]
+    nav: list[tuple[date, Decimal]]
+
+
 def _next_bar_by_symbol(rows: list[dict]) -> dict[tuple[str, date], dict]:
     ordered = sorted(rows, key=lambda row: (row["symbol"], row["date"]))
     mapping: dict[tuple[str, date], dict] = {}
