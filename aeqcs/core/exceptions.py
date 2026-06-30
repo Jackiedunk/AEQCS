@@ -27,3 +27,7 @@ class ConfigurationError(AEQCSError):
 
 class DataSourceError(AEQCSError):
     """Raised when an external data source fails or returns an invalid payload."""
+
+
+class DocumentParseError(AEQCSError):
+    """Raised when an uploaded document cannot be safely parsed."""

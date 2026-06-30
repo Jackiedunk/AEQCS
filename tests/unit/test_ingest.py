@@ -1,11 +1,11 @@
 import base64
-import binascii
 import json
 
 import pytest
 
+from aeqcs.core.exceptions import DocumentParseError
 from aeqcs.core.mcp_server import call_local_tool
-from aeqcs.ingest.document_parser import chunk_text, decode_upload
+from aeqcs.ingest.document_parser import chunk_text, decode_upload, safe_upload_filename
 
 
 def b64(text: str) -> str:
@@ -13,8 +13,25 @@ def b64(text: str) -> str:
 
 
 def test_decode_upload_rejects_invalid_base64():
-    with pytest.raises(binascii.Error):
+    with pytest.raises(DocumentParseError):
         decode_upload("not-valid-@@")
+
+
+def test_safe_upload_filename_allows_plain_supported_text_name():
+    assert safe_upload_filename(" note.md ") == "note.md"
+
+
+@pytest.mark.parametrize("filename", ["../evil.md", "nested/file.md", r"nested\file.md", r"C:\evil.md", "evil.csv"])
+def test_load_inbox_rejects_unsafe_or_unsupported_filename(tmp_path, filename):
+    with pytest.raises(DocumentParseError):
+        call_local_tool(
+            "load_inbox",
+            {"filename": filename, "content_base64": b64("text")},
+            root=str(tmp_path),
+        )
+
+    assert not (tmp_path / "evil.md").exists()
+    assert not (tmp_path / "inbox" / "evil.csv").exists()
 
 
 def test_chunk_text_uses_overlap():

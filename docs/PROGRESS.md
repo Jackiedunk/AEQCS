@@ -9,7 +9,7 @@
 当前最后一个已确认推送到 GitHub 的提交是：
 
 ```text
-本进度文档所在提交：Add local inbox document ingestion
+本进度文档所在提交：Harden inbox upload validation
 ```
 
 GitHub 仓库：
@@ -18,7 +18,7 @@ GitHub 仓库：
 https://github.com/Jackiedunk/AEQCS
 ```
 
-本次已把通过验证的“上传学习闭环第一段”和本进度文档纳入提交并准备推送到 GitHub。
+本次已把通过验证的“上传入口安全校验加固”和本进度文档纳入提交并准备推送到 GitHub。
 
 ## 已完成并推送的阶段
 
@@ -178,13 +178,31 @@ f7289bf Persist backtest reports behind tool contract
 本进度文档所在提交：Add local inbox document ingestion
 ```
 
+### 10. 上传入口安全校验加固
+
+已完成：
+
+- 增加项目内 `DocumentParseError` 文档解析错误类型
+- base64 上传内容非法时返回明确解析错误
+- 上传文件名必须是单文件名，拒绝路径穿越、子目录路径、Windows 盘符路径和控制字符
+- 上传入口只写入校验后的安全文件名
+- 不支持的扩展名统一按文档解析错误处理
+- UTF-8 解码失败统一按文档解析错误处理
+- 增加路径安全和不支持扩展名单元测试
+
+对应提交：
+
+```text
+本进度文档所在提交：Harden inbox upload validation
+```
+
 ## 当前工作区状态
 
 本次推送前验证通过：
 
 ```text
 python -m pytest
-33 passed
+39 passed
 
 python -m compileall aeqcs tests scripts
 passed
@@ -203,7 +221,7 @@ python -m compileall aeqcs tests scripts
 当前推送前测试规模：
 
 ```text
-33 passed
+39 passed
 ```
 
 ## 重要技术约束和已守住的边界
@@ -220,6 +238,8 @@ python -m compileall aeqcs tests scripts
 - 回测使用次日开盘成交
 - MCP 本地工具输出经过 JSON 安全转换
 - 股票代码前导零在本地 CSV 中保留
+- 上传文件名拒绝路径穿越和非文本扩展名
+- 上传文档解析错误使用项目内显式错误类型
 
 ## 仍未完成的主要范围
 
@@ -234,7 +254,7 @@ python -m compileall aeqcs tests scripts
 - Telegram 告警未实现
 - intraday 监听和 CEP 规则执行未实现
 - semantic network 的写入、搜索、递归树接口还很薄
-- 上传学习闭环已做到本地文档解析/分块/简单 proposal 抽取，未做 embedding、PDF/EPUB、人工审核 UI
+- 上传学习闭环已做到本地文档解析/分块/简单 proposal 抽取和文件名安全校验，未做 embedding、PDF/EPUB、人工审核 UI
 - dashboard 未实现
 - 报告系统未实现
 - 8 个 agent 只有角色 prompt，还没有完整行为实现
@@ -245,13 +265,12 @@ python -m compileall aeqcs tests scripts
 
 恢复时建议进入以下顺序：
 
-1. 增加文档解析错误类型和安全文件名处理
-2. 完成真实 `load_inbox` 的 PG 集成测试和 schema 细节修正
-3. 实现 MCP stdio 服务真实工具注册
-4. 增加 PostgreSQL 集成测试配置
-5. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
-6. 实现 semantic network 的本地/PG 节点边写入和查询
-7. 把上传提案接到闸门验证和晋升流程
+1. 完成真实 `load_inbox` 的 PG 集成测试和 schema 细节修正
+2. 实现 MCP stdio 服务真实工具注册
+3. 增加 PostgreSQL 集成测试配置
+4. 扩展回测执行模型：手续费、滑点、可成交性、停牌/一字板过滤
+5. 实现 semantic network 的本地/PG 节点边写入和查询
+6. 把上传提案接到闸门验证和晋升流程
 
 ## 说明
 
