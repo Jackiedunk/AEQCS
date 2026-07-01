@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
@@ -96,6 +97,8 @@ def run_minute_backfill_resume(
     today: date | None = None,
     source: str = "baostock",
     frequency: str = "5",
+    sleep_seconds: float = 0.0,
+    max_consecutive_errors: int = 5,
 ) -> MinuteBackfillResult:
     if not symbols:
         raise ValueError("symbols is required")
@@ -103,6 +106,10 @@ def run_minute_backfill_resume(
         raise ValueError("start must be on or before end")
     if daily_quota < 1:
         raise ValueError("daily_quota must be positive")
+    if sleep_seconds < 0:
+        raise ValueError("sleep_seconds cannot be negative")
+    if max_consecutive_errors < 1:
+        raise ValueError("max_consecutive_errors must be positive")
     checked_symbols = tuple(require_non_empty_text(symbol, "symbol") for symbol in symbols)
     run_day = today or date.today()
     path = Path(checkpoint_path)
@@ -119,6 +126,7 @@ def run_minute_backfill_resume(
     used_today = int(checkpoint.get("used_today", 0))
     requests_used = 0
     rows_written = 0
+    consecutive_errors = 0
 
     for symbol in checked_symbols:
         if symbol in completed:
@@ -150,12 +158,26 @@ def run_minute_backfill_resume(
         except DataSourceError as exc:
             used_today += 1
             requests_used += 1
+            consecutive_errors += 1
             failed[symbol] = str(exc)
             checkpoint["quota_day"] = run_day.isoformat()
             checkpoint["used_today"] = used_today
             checkpoint["failed_symbols"] = dict(sorted(failed.items()))
             _save_checkpoint(path, checkpoint)
+            if sleep_seconds:
+                time.sleep(sleep_seconds)
+            if consecutive_errors >= max_consecutive_errors:
+                return MinuteBackfillResult(
+                    status="stopped_after_errors",
+                    source=source,
+                    checkpoint_path=str(path),
+                    symbols_total=len(checked_symbols),
+                    symbols_completed=len(completed),
+                    requests_used=requests_used,
+                    rows_written=rows_written,
+                )
             continue
+        consecutive_errors = 0
         used_today += 1
         requests_used += 1
         rows_written += writer.write(frame)
@@ -164,6 +186,8 @@ def run_minute_backfill_resume(
         checkpoint["used_today"] = used_today
         checkpoint["completed_symbols"] = sorted(completed)
         _save_checkpoint(path, checkpoint)
+        if sleep_seconds:
+            time.sleep(sleep_seconds)
 
     status = "completed_with_errors" if failed else "completed"
     return MinuteBackfillResult(

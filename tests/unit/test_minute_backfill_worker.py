@@ -54,6 +54,12 @@ class OneSymbolFailingMinuteAdapter(FakeMinuteAdapter):
         )
 
 
+class AlwaysFailingMinuteAdapter(FakeMinuteAdapter):
+    def minute(self, symbol: str, start: date, end: date, *, frequency: str = "5") -> pd.DataFrame:
+        self.calls.append((symbol, start, end, frequency))
+        raise DataSourceError("provider unavailable")
+
+
 class FakeMinuteWriter:
     def __init__(self) -> None:
         self.frames: list[pd.DataFrame] = []
@@ -187,3 +193,25 @@ def test_minute_backfill_records_symbol_error_and_continues(tmp_path: Path):
     payload = checkpoint.read_text(encoding="utf-8")
     assert "bj.920000" in payload
     assert "unsupported exchange" in payload
+
+
+def test_minute_backfill_stops_after_consecutive_symbol_errors(tmp_path: Path):
+    checkpoint = tmp_path / "minute_checkpoint.json"
+    adapter = AlwaysFailingMinuteAdapter()
+    writer = FakeMinuteWriter()
+
+    result = run_minute_backfill_resume(
+        adapter=adapter,
+        writer=writer,
+        symbols=("sh.600000", "sh.600004", "sh.600006"),
+        start=date(2026, 6, 30),
+        end=date(2026, 6, 30),
+        checkpoint_path=checkpoint,
+        daily_quota=10,
+        today=date(2026, 7, 1),
+        max_consecutive_errors=2,
+    )
+
+    assert result.status == "stopped_after_errors"
+    assert result.requests_used == 2
+    assert [call[0] for call in adapter.calls] == ["sh.600000", "sh.600004"]

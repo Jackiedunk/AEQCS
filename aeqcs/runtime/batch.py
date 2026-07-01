@@ -417,6 +417,8 @@ def main() -> None:
     parser.add_argument("--frequency", default="5", help="Baostock minute frequency, default 5")
     parser.add_argument("--daily-quota", type=int, default=50000)
     parser.add_argument("--checkpoint", default="/data/aeqcs/runtime/minute_backfill_checkpoint.json")
+    parser.add_argument("--sleep-seconds", type=float, default=0.0)
+    parser.add_argument("--max-consecutive-errors", type=int, default=5)
     args = parser.parse_args()
     if args.job == "smoke":
         run_smoke()
@@ -474,6 +476,8 @@ def main() -> None:
             checkpoint_path=args.checkpoint,
             daily_quota=args.daily_quota,
             frequency=args.frequency,
+            sleep_seconds=args.sleep_seconds,
+            max_consecutive_errors=args.max_consecutive_errors,
         )
         print(result_to_dict(result))
         return
