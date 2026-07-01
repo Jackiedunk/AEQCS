@@ -138,7 +138,7 @@ def test_schema_defines_restricted_mcp_database_role():
     assert "CREATE ROLE aeqcs_mcp LOGIN PASSWORD 'CHANGE_ME_AEQCS_MCP'" in SCHEMA_SQL
     assert "REVOKE ALL ON SCHEMA public FROM aeqcs_mcp" in SCHEMA_SQL
     assert "GRANT USAGE ON SCHEMA public TO aeqcs_mcp" in SCHEMA_SQL
-    assert "GRANT SELECT ON stock_daily_origin, financial_indicators" in SCHEMA_SQL
+    assert "GRANT SELECT ON stock_daily_origin, adj_factor, financial_indicators" in SCHEMA_SQL
     assert "GRANT SELECT ON index_constituents TO aeqcs_mcp" in SCHEMA_SQL
     assert "TO aeqcs_mcp" in SCHEMA_SQL
     assert "GRANT SELECT, INSERT, UPDATE ON proposals" in SCHEMA_SQL

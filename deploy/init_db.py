@@ -296,7 +296,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 REVOKE ALL ON SCHEMA public FROM aeqcs_mcp;
 GRANT USAGE ON SCHEMA public TO aeqcs_mcp;
 
-GRANT SELECT ON stock_daily_origin, financial_indicators TO aeqcs_mcp;
+GRANT SELECT ON stock_daily_origin, adj_factor, financial_indicators TO aeqcs_mcp;
 GRANT SELECT ON index_constituents TO aeqcs_mcp;
 GRANT SELECT ON factor_values, backtest_results, backtest_tasks, uploaded_docs, doc_chunks TO aeqcs_mcp;
 GRANT SELECT, INSERT, UPDATE ON proposals TO aeqcs_mcp;
