@@ -16,7 +16,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/aeqcs/data /opt/aeqcs/logs
+ReadWritePaths=/data/aeqcs /opt/aeqcs/data /opt/aeqcs/logs
 
 [Install]
 WantedBy=multi-user.target
