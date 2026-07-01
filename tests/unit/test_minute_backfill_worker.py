@@ -107,3 +107,35 @@ def test_minute_backfill_stops_before_request_when_daily_quota_is_exhausted(tmp_
     assert result.rows_written == 0
     assert adapter.calls == []
     assert writer.frames == []
+
+
+def test_minute_backfill_resets_completed_symbols_when_job_range_changes(tmp_path: Path):
+    checkpoint = tmp_path / "minute_checkpoint.json"
+    adapter = FakeMinuteAdapter()
+    writer = FakeMinuteWriter()
+
+    run_minute_backfill_resume(
+        adapter=adapter,
+        writer=writer,
+        symbols=("sh.600000",),
+        start=date(2026, 6, 1),
+        end=date(2026, 6, 30),
+        checkpoint_path=checkpoint,
+        daily_quota=10,
+        today=date(2026, 7, 1),
+    )
+    result = run_minute_backfill_resume(
+        adapter=adapter,
+        writer=writer,
+        symbols=("sh.600000",),
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 31),
+        checkpoint_path=checkpoint,
+        daily_quota=10,
+        today=date(2026, 7, 1),
+    )
+
+    assert result.status == "completed"
+    assert result.requests_used == 1
+    assert len(adapter.calls) == 2
+    assert adapter.calls[-1][1:] == (date(2026, 7, 1), date(2026, 7, 31), "5")

@@ -38,21 +38,39 @@ class MinuteBackfillResult:
     rows_written: int
 
 
-def _load_checkpoint(path: Path, *, source: str, today: date) -> dict[str, Any]:
+def _job_key(*, start: date, end: date, frequency: str) -> dict[str, str]:
+    return {"start": start.isoformat(), "end": end.isoformat(), "frequency": frequency}
+
+
+def _load_checkpoint(
+    path: Path,
+    *,
+    source: str,
+    today: date,
+    start: date,
+    end: date,
+    frequency: str,
+) -> dict[str, Any]:
+    job = _job_key(start=start, end=end, frequency=frequency)
     if not path.exists():
         return {
             "source": source,
             "quota_day": today.isoformat(),
             "used_today": 0,
             "completed_symbols": [],
+            **job,
         }
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("quota_day") != today.isoformat():
         payload["quota_day"] = today.isoformat()
         payload["used_today"] = 0
+    if any(payload.get(key) != value for key, value in job.items()):
+        payload["completed_symbols"] = []
+        payload.update(job)
     payload.setdefault("source", source)
     payload.setdefault("completed_symbols", [])
     payload.setdefault("used_today", 0)
+    payload.update(job)
     return payload
 
 
@@ -85,7 +103,14 @@ def run_minute_backfill_resume(
     checked_symbols = tuple(require_non_empty_text(symbol, "symbol") for symbol in symbols)
     run_day = today or date.today()
     path = Path(checkpoint_path)
-    checkpoint = _load_checkpoint(path, source=source, today=run_day)
+    checkpoint = _load_checkpoint(
+        path,
+        source=source,
+        today=run_day,
+        start=start,
+        end=end,
+        frequency=frequency,
+    )
     completed = set(str(symbol) for symbol in checkpoint.get("completed_symbols", []))
     used_today = int(checkpoint.get("used_today", 0))
     requests_used = 0
