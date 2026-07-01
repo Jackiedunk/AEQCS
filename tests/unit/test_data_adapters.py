@@ -77,6 +77,27 @@ class MalformedTushareRowsClient:
         )
 
 
+class DuplicateTushareFinancialColumnsClient:
+    def daily(self, **kwargs):
+        raise AssertionError("daily should not be called")
+
+    def fina_indicator(self, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "000001",
+                    "end_date": "20251231",
+                    "ann_date": "20260115",
+                    "roe": 0.99,
+                    "roe_dt": 0.12,
+                    "gross_margin": 0.88,
+                    "grossprofit_margin": 0.31,
+                    "netprofit_margin": 0.17,
+                }
+            ]
+        )
+
+
 class FakeAkshareClient:
     def stock_board_concept_cons_ths(self, symbol: str):
         return pd.DataFrame([{"代码": "1", "名称": "平安银行"}])
@@ -348,6 +369,16 @@ def test_tushare_financials_normalize_pit_fields():
     assert frame.iloc[0]["gross_margin"] == 0.31
     assert frame.iloc[0]["net_margin"] == 0.17
     assert frame.iloc[0]["quick_ratio"] == 1.08
+
+
+def test_tushare_financials_prefer_mapped_provider_fields_without_duplicate_columns():
+    adapter = TushareAdapter(client=DuplicateTushareFinancialColumnsClient())
+
+    frame = adapter.fina_indicator("000001")
+
+    assert frame.columns.is_unique
+    assert frame.iloc[0]["roe"] == 0.12
+    assert frame.iloc[0]["gross_margin"] == 0.31
 
 
 def test_tushare_rejects_invalid_provider_rows_as_data_source_errors():

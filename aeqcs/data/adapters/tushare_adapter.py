@@ -42,6 +42,16 @@ def _normalize_provider_frame(frame: pd.DataFrame, source: str, normalize_fn: An
         raise DataSourceError(f"{source} invalid row: {exc}") from exc
 
 
+def _rename_prefer_provider_fields(frame: pd.DataFrame, rename: dict[str, str]) -> pd.DataFrame:
+    """Rename provider fields while avoiding duplicate canonical columns."""
+
+    out = frame.copy()
+    for source, target in rename.items():
+        if source != target and source in out.columns and target in out.columns:
+            out = out.drop(columns=[target])
+    return out.rename(columns=rename)
+
+
 class TushareAdapter:
     def __init__(
         self,
@@ -76,7 +86,7 @@ class TushareAdapter:
         if raw is None or raw.empty:
             return pd.DataFrame(columns=["symbol", "date", "open", "high", "low", "close", "volume", "amount"])
         rename = {"ts_code": "symbol", "trade_date": "date", "vol": "volume"}
-        frame = raw.rename(columns=rename)
+        frame = _rename_prefer_provider_fields(raw, rename)
         missing = {"symbol", "date", "open", "high", "low", "close", "volume", "amount"} - set(frame.columns)
         if missing:
             raise DataSourceError(f"Tushare daily missing columns: {sorted(missing)}")
@@ -107,7 +117,7 @@ class TushareAdapter:
             "grossprofit_margin": "gross_margin",
             "netprofit_margin": "net_margin",
         }
-        frame = raw.rename(columns=rename)
+        frame = _rename_prefer_provider_fields(raw, rename)
         if "ann_date" not in frame.columns:
             raise DataSourceError("Tushare fina_indicator missing ann_date")
         frame["vintage"] = frame.get("vintage", 0)
