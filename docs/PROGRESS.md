@@ -378,3 +378,14 @@ passed
   - full suite with real integration DSN: `482 passed`
 - Table bloat check was intentionally not marked accepted yet because the required 4-hour intraday observation window has not run on the target Linux/systemd host. A current-state probe reported insufficient observation time and dead tuples in `proposals`.
 - Remaining production acceptance is deployment-environment work: target host systemd/cgroup run, HTTP/SSE probe against the live service, four-hour intraday load, table-bloat recheck, real restore rehearsal into an isolated database, and baostock minute backfill dry-run against the live data source.
+
+## 2026-07-01 Linux packaging and interface handoff update
+
+- Added a production-facing Linux installation guide at `docs/LINUX_INSTALL.md`, covering Ubuntu packages, service user, `/opt/aeqcs`, `/data/aeqcs`, `/etc/aeqcs/aeqcs.env`, PostgreSQL/TimescaleDB initialization, systemd installation, acceptance checks, upgrade flow, and WSL2 notes.
+- Added `docs/INTERFACE_SETUP.md`, documenting the MCP HTTP/SSE endpoint, exact registered MCP tool names, Hermes caller contract, data-source responsibilities, required environment variables, common commands, and verification scripts.
+- Added `docs/OPERATIONS_RUNBOOK.md`, covering daily service checks, data-quality alert handling, baostock backfill quota policy, restore rehearsal, resource budgets, and incident response commands.
+- Added `deploy/aeqcs.env.example` as the production environment template and expanded `.env.example` for local development.
+- Added `deploy/install_linux.sh` to create the Linux service layout, install dependencies into `/opt/aeqcs/.venv`, create `/etc/aeqcs/aeqcs.env` when absent, and install systemd units.
+- Unified `mcp-server`, `intraday`, `batch-eod`, and `restore-rehearsal` systemd units around `User=aeqcs` and `EnvironmentFile=-/etc/aeqcs/aeqcs.env`.
+- Added `baostock` to the `data` optional dependency extra so a fresh Linux install can actually use the configured minute-data source.
+- Extended `deploy/init_db.py` to create and grant the full `aeqcs_core` runtime role in addition to the restricted `aeqcs_mcp` role.

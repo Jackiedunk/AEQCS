@@ -3,6 +3,8 @@ Description=AEQCS intraday monitor
 
 [Service]
 Type=simple
+User=aeqcs
+EnvironmentFile=-/etc/aeqcs/aeqcs.env
 WorkingDirectory=/opt/aeqcs
 MemoryMax=16G
 ExecStart=/opt/aeqcs/.venv/bin/python -m aeqcs.runtime.intraday

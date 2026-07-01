@@ -23,7 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 qlib = ["pyqlib>=0.9.5"]
-data = ["akshare", "tushare", "sentence-transformers", "scipy", "cvxpy", "scikit-learn"]
+data = ["akshare", "baostock", "tushare", "sentence-transformers", "scipy", "cvxpy", "scikit-learn"]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.23",

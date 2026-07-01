@@ -93,9 +93,11 @@ def test_batch_night_has_independent_systemd_timer_entrypoint():
 def test_restore_rehearsal_has_systemd_timer_entrypoint():
     service = read_deploy_file("deploy/systemd/restore-rehearsal.service")
     timer = read_deploy_file("deploy/systemd/restore-rehearsal.timer")
+    env_template = read_deploy_file("deploy/aeqcs.env.example")
 
     assert "Description=AEQCS restore rehearsal" in service
-    assert "AEQCS_RESTORE_PG_DSN" in service
+    assert "EnvironmentFile=-/etc/aeqcs/aeqcs.env" in service
+    assert "AEQCS_RESTORE_PG_DSN=" in env_template
     assert "ExecStart=/opt/aeqcs/.venv/bin/python -m aeqcs.runtime.batch restore-rehearsal" in service
     assert "OnCalendar=Sun 02:30:00 Asia/Shanghai" in timer
     assert "Persistent=true" in timer
@@ -103,9 +105,12 @@ def test_restore_rehearsal_has_systemd_timer_entrypoint():
 
 def test_mcp_server_systemd_service_uses_sse_loopback_and_restart():
     service = read_deploy_file("deploy/systemd/mcp-server.service")
+    env_template = read_deploy_file("deploy/aeqcs.env.example")
 
-    assert "Environment=AEQCS_MCP_TRANSPORT=sse" in service
-    assert "Environment=AEQCS_MCP_HOST=127.0.0.1" in service
+    assert "User=aeqcs" in service
+    assert "EnvironmentFile=-/etc/aeqcs/aeqcs.env" in service
+    assert "AEQCS_MCP_TRANSPORT=sse" in env_template
+    assert "AEQCS_MCP_HOST=127.0.0.1" in env_template
     assert "Restart=on-failure" in service
     assert "ExecStart=/opt/aeqcs/.venv/bin/python -m aeqcs.core.mcp_server" in service
 
@@ -127,6 +132,9 @@ def test_semantic_graph_schema_keeps_manual_audit_and_asof_fields():
 
 
 def test_schema_defines_restricted_mcp_database_role():
+    assert "CREATE ROLE aeqcs_core LOGIN PASSWORD 'CHANGE_ME_AEQCS_CORE'" in SCHEMA_SQL
+    assert "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO aeqcs_core" in SCHEMA_SQL
+    assert "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO aeqcs_core" in SCHEMA_SQL
     assert "CREATE ROLE aeqcs_mcp LOGIN PASSWORD 'CHANGE_ME_AEQCS_MCP'" in SCHEMA_SQL
     assert "REVOKE ALL ON SCHEMA public FROM aeqcs_mcp" in SCHEMA_SQL
     assert "GRANT USAGE ON SCHEMA public TO aeqcs_mcp" in SCHEMA_SQL
@@ -153,9 +161,11 @@ def test_financial_indicators_schema_includes_liquidity_factor_inputs():
 
 def test_mcp_systemd_service_uses_restricted_pg_dsn_environment():
     service = read_deploy_file("deploy/systemd/mcp-server.service")
+    env_template = read_deploy_file("deploy/aeqcs.env.example")
 
-    assert "Environment=AEQCS_CORE_PG_DSN=postgresql://aeqcs_mcp:CHANGE_ME_AEQCS_MCP@127.0.0.1/aeqcs" in service
-    assert "Environment=AEQCS_MCP_POOL_SIZE=8" in service
+    assert "EnvironmentFile=-/etc/aeqcs/aeqcs.env" in service
+    assert "AEQCS_CORE_PG_DSN=postgresql://aeqcs_mcp:CHANGE_ME_AEQCS_MCP@127.0.0.1:5432/aeqcs" in env_template
+    assert "AEQCS_MCP_POOL_SIZE=8" in env_template
 
 
 def test_backtest_tasks_schema_persists_mcp_background_task_state():

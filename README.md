@@ -14,7 +14,46 @@ Core blueprint: [docs/AEQCS_ARCHITECTURE_V2.md](docs/AEQCS_ARCHITECTURE_V2.md).
 
 This branch implements the deterministic core layer: point-in-time data access, market and financial ETL boundaries, factor evaluation, backtesting, proposal gates, deterministic graph tools, risk/portfolio utilities, event bus, MCP HTTP/SSE boundary, and deployment verification entrypoints.
 
+## Production Guides
+
+- Linux installation: [docs/LINUX_INSTALL.md](docs/LINUX_INSTALL.md)
+- Interface setup and usage: [docs/INTERFACE_SETUP.md](docs/INTERFACE_SETUP.md)
+- Operations runbook: [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md)
+- Production acceptance status: [docs/PRODUCTION_ACCEPTANCE.md](docs/PRODUCTION_ACCEPTANCE.md)
+- PostgreSQL integration tests: [docs/POSTGRES_INTEGRATION_TESTS.md](docs/POSTGRES_INTEGRATION_TESTS.md)
+
+## Linux Quick Install
+
+On an Ubuntu host with Python 3.11 already installed:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git curl ca-certificates build-essential pkg-config python3.11 python3.11-venv python3.11-dev postgresql-client
+sudo git clone https://github.com/Jackiedunk/AEQCS.git /opt/aeqcs
+cd /opt/aeqcs
+sudo git checkout codex/deterministic-core-layer
+sudo bash deploy/install_linux.sh
+sudo nano /etc/aeqcs/aeqcs.env
+```
+
+Then initialize PostgreSQL/TimescaleDB:
+
+```bash
+cd /opt/aeqcs
+sudo -u aeqcs .venv/bin/python deploy/init_db.py "postgresql://postgres:CHANGE_ME@127.0.0.1:5432/aeqcs"
+sudo systemctl enable --now mcp-server.service
+sudo -u aeqcs .venv/bin/python -m scripts.verify_mcp_http_sse --endpoint http://127.0.0.1:8000/sse --connections 8
+```
+
+The default MCP endpoint for Hermes or another trusted local client is:
+
+```text
+http://127.0.0.1:8000/sse
+```
+
 ## Quick Start
+
+Local development on Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -55,7 +94,29 @@ To import real Tushare data into the local development store:
 python scripts/import_tushare_local.py --symbol 000001.SZ --start 2026-01-01 --end 2026-01-31 --token $env:TUSHARE_TOKEN
 ```
 
-On the target Ubuntu host, use Python 3.11 and `uv`.
+On the target Ubuntu host, use Python 3.11. The production installer uses a local virtual environment under `/opt/aeqcs/.venv`.
+
+## Interface Summary
+
+Runtime interfaces:
+
+- MCP HTTP/SSE: deterministic core tools for Hermes or another local MCP client.
+- Batch commands: `aeqcs.runtime.batch eod`, `night`, `smoke`, and `restore-rehearsal`.
+- Intraday command: `aeqcs.runtime.intraday`.
+- PostgreSQL/TimescaleDB: authoritative store with restricted MCP role.
+
+Key environment variables:
+
+- `AEQCS_PG_DSN`: full core database role for batch, ingestion, maintenance, and verification.
+- `AEQCS_CORE_PG_DSN`: restricted MCP role used by `mcp-server.service`.
+- `AEQCS_MCP_TRANSPORT=sse`
+- `AEQCS_MCP_HOST=127.0.0.1`
+- `AEQCS_MCP_PORT=8000`
+- `AEQCS_MCP_POOL_SIZE=8`
+- `TUSHARE_TOKEN`: required for PIT financial data.
+- `AEQCS_RESTORE_PG_DSN`: isolated restore rehearsal database.
+
+See [docs/INTERFACE_SETUP.md](docs/INTERFACE_SETUP.md) for the MCP tool list and caller contract.
 
 ## Layout
 
@@ -73,12 +134,44 @@ deploy/       PostgreSQL bootstrap, systemd units, OS tuning
 tests/        unit and look-ahead tests
 ```
 
+## Data Source Policy
+
+- Tushare is the authoritative source for PIT financial/fundamental data and the primary daily market path.
+- baostock is used only for historical minute data and daily cross-checks.
+- baostock data is pulled as raw unadjusted prices (`adjustflag=3`); AEQCS owns adjustment-factor logic.
+- baostock is serialized through a process-global lock and guarded by a daily quota.
+
 ## Non-Negotiables
 
 - Any data read that can influence research or trading must carry `as_of_date`.
 - Cognitive output may only enter the core as proposals.
 - Backtests execute against data known at the decision time.
 - Intraday monitoring is alert-only; no automatic intraday execution.
+
+## Verification
+
+Core local verification:
+
+```bash
+python -m pytest
+python -m aeqcs.runtime.batch smoke
+python -m scripts.verify_core_offline
+```
+
+Live MCP/SSE verification:
+
+```bash
+python -m scripts.verify_mcp_http_sse --endpoint http://127.0.0.1:8000/sse --connections 8
+```
+
+PostgreSQL/TimescaleDB verification:
+
+```bash
+export AEQCS_TEST_PG_DSN="postgresql://user:password@host:5432/aeqcs_test?sslmode=require"
+python -m pytest tests/integration -m integration
+python -m scripts.verify_mcp_permissions
+python -m scripts.verify_mcp_backtest_recovery
+```
 
 ## Current Development Status
 

@@ -3,6 +3,8 @@ Description=AEQCS end-of-day batch
 
 [Service]
 Type=oneshot
+User=aeqcs
+EnvironmentFile=-/etc/aeqcs/aeqcs.env
 WorkingDirectory=/opt/aeqcs
 MemoryMax=16G
 ExecStart=/opt/aeqcs/.venv/bin/python -m aeqcs.runtime.batch eod
