@@ -13,7 +13,7 @@ from typing import Any, Protocol
 import asyncpg
 import pandas as pd
 
-from aeqcs.core.exceptions import RateLimitExceeded
+from aeqcs.core.exceptions import DataSourceError, RateLimitExceeded
 from aeqcs.core.versioning import require_non_empty_text
 
 
@@ -58,6 +58,7 @@ def _load_checkpoint(
             "quota_day": today.isoformat(),
             "used_today": 0,
             "completed_symbols": [],
+            "failed_symbols": {},
             **job,
         }
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -66,9 +67,11 @@ def _load_checkpoint(
         payload["used_today"] = 0
     if any(payload.get(key) != value for key, value in job.items()):
         payload["completed_symbols"] = []
+        payload["failed_symbols"] = {}
         payload.update(job)
     payload.setdefault("source", source)
     payload.setdefault("completed_symbols", [])
+    payload.setdefault("failed_symbols", {})
     payload.setdefault("used_today", 0)
     payload.update(job)
     return payload
@@ -112,6 +115,7 @@ def run_minute_backfill_resume(
         frequency=frequency,
     )
     completed = set(str(symbol) for symbol in checkpoint.get("completed_symbols", []))
+    failed: dict[str, str] = {str(key): str(value) for key, value in checkpoint.get("failed_symbols", {}).items()}
     used_today = int(checkpoint.get("used_today", 0))
     requests_used = 0
     rows_written = 0
@@ -143,6 +147,15 @@ def run_minute_backfill_resume(
                 requests_used=requests_used,
                 rows_written=rows_written,
             )
+        except DataSourceError as exc:
+            used_today += 1
+            requests_used += 1
+            failed[symbol] = str(exc)
+            checkpoint["quota_day"] = run_day.isoformat()
+            checkpoint["used_today"] = used_today
+            checkpoint["failed_symbols"] = dict(sorted(failed.items()))
+            _save_checkpoint(path, checkpoint)
+            continue
         used_today += 1
         requests_used += 1
         rows_written += writer.write(frame)
@@ -152,8 +165,9 @@ def run_minute_backfill_resume(
         checkpoint["completed_symbols"] = sorted(completed)
         _save_checkpoint(path, checkpoint)
 
+    status = "completed_with_errors" if failed else "completed"
     return MinuteBackfillResult(
-        status="completed",
+        status=status,
         source=source,
         checkpoint_path=str(path),
         symbols_total=len(checked_symbols),

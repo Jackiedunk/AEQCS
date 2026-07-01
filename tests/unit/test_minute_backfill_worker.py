@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from aeqcs.core.exceptions import DataSourceError
 from aeqcs.runtime.minute_backfill import run_minute_backfill_resume
 
 
@@ -14,6 +15,28 @@ class FakeMinuteAdapter:
 
     def minute(self, symbol: str, start: date, end: date, *, frequency: str = "5") -> pd.DataFrame:
         self.calls.append((symbol, start, end, frequency))
+        return pd.DataFrame(
+            [
+                {
+                    "symbol": symbol,
+                    "timestamp": datetime(2026, 6, 30, 9, 35),
+                    "knowledge_ts": datetime(2026, 7, 1, 20, 0),
+                    "open": 10.0,
+                    "high": 10.2,
+                    "low": 9.9,
+                    "close": 10.1,
+                    "volume": 1000,
+                    "amount": 10100.0,
+                }
+            ]
+        )
+
+
+class OneSymbolFailingMinuteAdapter(FakeMinuteAdapter):
+    def minute(self, symbol: str, start: date, end: date, *, frequency: str = "5") -> pd.DataFrame:
+        self.calls.append((symbol, start, end, frequency))
+        if symbol == "bj.920000":
+            raise DataSourceError("unsupported exchange")
         return pd.DataFrame(
             [
                 {
@@ -139,3 +162,28 @@ def test_minute_backfill_resets_completed_symbols_when_job_range_changes(tmp_pat
     assert result.requests_used == 1
     assert len(adapter.calls) == 2
     assert adapter.calls[-1][1:] == (date(2026, 7, 1), date(2026, 7, 31), "5")
+
+
+def test_minute_backfill_records_symbol_error_and_continues(tmp_path: Path):
+    checkpoint = tmp_path / "minute_checkpoint.json"
+    adapter = OneSymbolFailingMinuteAdapter()
+    writer = FakeMinuteWriter()
+
+    result = run_minute_backfill_resume(
+        adapter=adapter,
+        writer=writer,
+        symbols=("bj.920000", "sh.600000"),
+        start=date(2026, 6, 30),
+        end=date(2026, 6, 30),
+        checkpoint_path=checkpoint,
+        daily_quota=10,
+        today=date(2026, 7, 1),
+    )
+
+    assert result.status == "completed_with_errors"
+    assert result.requests_used == 2
+    assert result.rows_written == 1
+    assert [call[0] for call in adapter.calls] == ["bj.920000", "sh.600000"]
+    payload = checkpoint.read_text(encoding="utf-8")
+    assert "bj.920000" in payload
+    assert "unsupported exchange" in payload
