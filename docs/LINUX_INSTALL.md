@@ -38,7 +38,7 @@ sudo chmod 750 /opt/aeqcs /data/aeqcs /etc/aeqcs
 ```bash
 sudo -u aeqcs git clone https://github.com/Jackiedunk/AEQCS.git /opt/aeqcs
 cd /opt/aeqcs
-sudo -u aeqcs git checkout codex/deterministic-core-layer
+sudo -u aeqcs git checkout master
 sudo -u aeqcs python3.11 -m venv .venv
 sudo -u aeqcs .venv/bin/python -m pip install --upgrade pip wheel
 sudo -u aeqcs .venv/bin/python -m pip install -e ".[data,qlib]"
@@ -118,7 +118,7 @@ Expected result: each verification script prints JSON with `status: "ok"` or exi
 cd /opt/aeqcs
 sudo systemctl stop mcp-server.service
 sudo -u aeqcs git fetch origin
-sudo -u aeqcs git checkout codex/deterministic-core-layer
+sudo -u aeqcs git checkout master
 sudo -u aeqcs git pull --ff-only
 sudo -u aeqcs .venv/bin/python -m pip install -e ".[data,qlib]"
 sudo -u aeqcs .venv/bin/python deploy/init_db.py "postgresql://postgres:CHANGE_ME@127.0.0.1:5432/aeqcs"
