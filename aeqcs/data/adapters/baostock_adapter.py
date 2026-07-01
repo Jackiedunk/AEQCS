@@ -75,6 +75,11 @@ def _assert_success(result: Any, source: str) -> None:
 
 
 def _frame_from_result(result: BaostockResult) -> pd.DataFrame:
+    if all(hasattr(result, attr) for attr in ("fields", "next", "get_row_data")):
+        rows = []
+        while result.next():  # type: ignore[attr-defined]
+            rows.append(result.get_row_data())  # type: ignore[attr-defined]
+        return pd.DataFrame(rows, columns=result.fields)  # type: ignore[attr-defined]
     frame = result.get_data()
     if frame is None:
         return pd.DataFrame()

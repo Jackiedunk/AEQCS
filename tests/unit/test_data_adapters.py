@@ -220,6 +220,26 @@ class FakeBaostockQueryResult:
         return self._frame
 
 
+class AppendBrokenBaostockQueryResult:
+    error_code = "0"
+    error_msg = "success"
+    fields = ["date", "code", "open", "high", "low", "close", "volume", "amount", "pctChg", "peTTM"]
+
+    def __init__(self, code: str):
+        self._rows = [["2026-01-02", code, "11", "12", "10", "11.5", "100", "1100", "1.23", "9.8"]]
+        self._index = -1
+
+    def get_data(self):
+        raise AttributeError("'DataFrame' object has no attribute 'append'")
+
+    def next(self):
+        self._index += 1
+        return self._index < len(self._rows)
+
+    def get_row_data(self):
+        return self._rows[self._index]
+
+
 class FakeBaostockClient:
     def __init__(self, *, sleep_seconds: float = 0.0):
         self.login_count = 0
@@ -268,6 +288,21 @@ class FakeBaostockClient:
             )
         finally:
             self.in_flight -= 1
+
+
+class AppendBrokenBaostockClient(FakeBaostockClient):
+    def query_history_k_data_plus(self, code, fields, start_date, end_date, frequency, adjustflag):
+        self.requests.append(
+            {
+                "code": code,
+                "fields": fields,
+                "start_date": start_date,
+                "end_date": end_date,
+                "frequency": frequency,
+                "adjustflag": adjustflag,
+            }
+        )
+        return AppendBrokenBaostockQueryResult(code)
 
 
 class FakeBaostockMinuteClient(FakeBaostockClient):
@@ -338,6 +373,16 @@ def test_baostock_daily_uses_raw_adjustflag_and_maps_to_canonical_daily_columns(
     assert frame.iloc[0]["pe_ttm"] == 9.8
     assert frame.iloc[0]["timestamp"] == pd.Timestamp("2026-01-02")
     assert frame.iloc[0]["knowledge_ts"] == now
+
+
+def test_baostock_daily_reads_rows_without_provider_get_data_append_dependency():
+    adapter = BaostockAdapter(client=AppendBrokenBaostockClient())
+
+    frame = adapter.daily("sh.000001", date(2026, 1, 1), date(2026, 1, 2))
+
+    assert len(frame) == 1
+    assert frame.iloc[0]["symbol"] == "sh.000001"
+    assert frame.iloc[0]["close"] == 11.5
 
 
 def test_baostock_reconnects_transparently_when_session_expires():
