@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import Decimal
@@ -395,7 +396,12 @@ def run_restore_rehearsal(
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="aeqcs-batch")
-    parser.add_argument("job", nargs="?", default="smoke", choices=["smoke", "pre", "eod", "night", "restore-rehearsal"])
+    parser.add_argument(
+        "job",
+        nargs="?",
+        default="smoke",
+        choices=["smoke", "pre", "eod", "night", "restore-rehearsal", "minute-backfill"],
+    )
     parser.add_argument("--today", help="Run date for deterministic batch plans, YYYY-MM-DD")
     parser.add_argument("--backup-date", help="Backup date for restore rehearsal plans, YYYY-MM-DD")
     parser.add_argument("--retention-months", type=int, default=3)
@@ -404,6 +410,13 @@ def main() -> None:
     parser.add_argument("--project-root", default="/opt/aeqcs")
     parser.add_argument("--pg-dsn-env", default="AEQCS_PG_DSN")
     parser.add_argument("--restore-pg-dsn-env", default="AEQCS_RESTORE_PG_DSN")
+    parser.add_argument("--symbols", help="Comma-separated baostock symbols, e.g. sh.600000,sz.000001")
+    parser.add_argument("--symbols-file", help="File containing one baostock symbol per line")
+    parser.add_argument("--start", help="Minute backfill start date, YYYY-MM-DD")
+    parser.add_argument("--end", help="Minute backfill end date, YYYY-MM-DD")
+    parser.add_argument("--frequency", default="5", help="Baostock minute frequency, default 5")
+    parser.add_argument("--daily-quota", type=int, default=50000)
+    parser.add_argument("--checkpoint", default="/data/aeqcs/runtime/minute_backfill_checkpoint.json")
     args = parser.parse_args()
     if args.job == "smoke":
         run_smoke()
@@ -428,6 +441,41 @@ def main() -> None:
             project_root=args.project_root,
             restore_pg_dsn_env=args.restore_pg_dsn_env,
         )
+        return
+    if args.job == "minute-backfill":
+        from aeqcs.data.adapters.baostock_adapter import BaostockAdapter
+        from aeqcs.data.rate_limiter import RateLimiter
+        from aeqcs.runtime.minute_backfill import (
+            PgMinuteBarWriter,
+            result_to_dict,
+            run_minute_backfill_resume,
+        )
+
+        if not args.start or not args.end:
+            raise SystemExit("--start and --end are required for minute-backfill")
+        symbols: list[str] = []
+        if args.symbols:
+            symbols.extend(symbol.strip() for symbol in args.symbols.split(",") if symbol.strip())
+        if args.symbols_file:
+            with open(args.symbols_file, encoding="utf-8") as handle:
+                symbols.extend(line.strip() for line in handle if line.strip() and not line.startswith("#"))
+        if not symbols:
+            raise SystemExit("--symbols or --symbols-file is required for minute-backfill")
+        dsn = os.environ.get(args.pg_dsn_env)
+        if not dsn:
+            raise SystemExit(f"{args.pg_dsn_env} is required for minute-backfill")
+        adapter = BaostockAdapter(rate_limiter=RateLimiter({"baostock": {"daily_quota": args.daily_quota}}))
+        result = run_minute_backfill_resume(
+            adapter=adapter,
+            writer=PgMinuteBarWriter(dsn),
+            symbols=tuple(symbols),
+            start=date.fromisoformat(args.start),
+            end=date.fromisoformat(args.end),
+            checkpoint_path=args.checkpoint,
+            daily_quota=args.daily_quota,
+            frequency=args.frequency,
+        )
+        print(result_to_dict(result))
         return
     print(f"AEQCS batch job '{args.job}' is not wired to production storage yet")
 
