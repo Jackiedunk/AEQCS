@@ -81,6 +81,16 @@ def _frame_from_result(result: BaostockResult) -> pd.DataFrame:
     return frame
 
 
+def _parse_minute_timestamps(frame: pd.DataFrame) -> pd.Series:
+    time_text = frame["time"].astype(str).str.strip()
+    clock_text = time_text.where(~time_text.str.match(r"^\d{14,}$"), time_text.str.slice(8, 14))
+    clock_text = clock_text.str.zfill(6).str.slice(0, 6)
+    return pd.to_datetime(
+        frame["date"].astype(str) + " " + clock_text,
+        format="%Y-%m-%d %H%M%S",
+    )
+
+
 class BaostockAdapter:
     """Baostock adapter for raw market data only.
 
@@ -213,7 +223,7 @@ class BaostockAdapter:
         missing = {"symbol", "date", "time", "open", "high", "low", "close", "volume", "amount"} - set(frame.columns)
         if missing:
             raise DataSourceError(f"baostock minute missing columns: {sorted(missing)}")
-        frame["timestamp"] = pd.to_datetime(frame["date"].astype(str) + " " + frame["time"].astype(str).str[:6])
+        frame["timestamp"] = _parse_minute_timestamps(frame)
         frame["knowledge_ts"] = self._clock()
         for column in ("open", "high", "low", "close", "amount", "volume"):
             frame[column] = pd.to_numeric(frame[column])

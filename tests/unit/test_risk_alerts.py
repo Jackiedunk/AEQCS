@@ -83,3 +83,30 @@ async def test_publish_strategy_risk_alerts_rejects_non_risk_officer_actions() -
 
     with pytest.raises(ValueError, match="unsupported risk alert action"):
         await _publisher()(FakeBus(), report, source="strategy", timestamp=datetime(2026, 1, 3, 15, 0))
+
+
+@pytest.mark.asyncio
+async def test_publish_strategy_risk_alerts_compacts_long_event_ids_for_postgresql_schema() -> None:
+    report = {
+        "alerts": [
+            {
+                "severity": "red",
+                "action": "risk_officer.reduce_exposure",
+                "metric": "gross_exposure",
+                "value": Decimal("1.2"),
+                "threshold": Decimal("1"),
+            }
+        ],
+    }
+    long_source = "delivery-rehearsal-" + ("a" * 80)
+    first_bus = FakeBus()
+    second_bus = FakeBus()
+
+    await _publisher()(first_bus, report, source=long_source, timestamp=datetime(2026, 1, 3, 15, 0))
+    await _publisher()(second_bus, report, source=long_source, timestamp=datetime(2026, 1, 3, 15, 0))
+
+    first_event_id = first_bus.published[0][1].event_id
+    second_event_id = second_bus.published[0][1].event_id
+    assert len(first_event_id) <= 100
+    assert first_event_id == second_event_id
+    assert first_event_id.startswith("risk_alert:")

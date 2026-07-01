@@ -27,6 +27,13 @@ def test_expected_alert_event_id_matches_strategy_risk_publisher():
     assert event_id == "risk_alert:delivery-test:risk_officer.reduce_exposure:gross_exposure"
 
 
+def test_expected_alert_event_id_compacts_long_source_for_schema_limit():
+    event_id = expected_alert_event_id("delivery-rehearsal-" + ("a" * 80))
+
+    assert len(event_id) <= 100
+    assert event_id.startswith("risk_alert:")
+
+
 def test_evaluate_delivery_accepts_published_and_consumed_alert():
     event_id = expected_alert_event_id("delivery-test")
     report = evaluate_delivery(

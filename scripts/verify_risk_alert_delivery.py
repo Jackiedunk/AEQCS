@@ -14,7 +14,7 @@ import asyncpg
 
 from aeqcs.core.event_bus import EventBus
 from aeqcs.core.mcp_server import normalize_asyncpg_dsn
-from aeqcs.runtime.risk_alerts import publish_strategy_risk_alerts
+from aeqcs.runtime.risk_alerts import _event_id, publish_strategy_risk_alerts
 
 
 CONSUMER_ID = "risk_alert_delivery_rehearsal"
@@ -35,7 +35,8 @@ def build_alert_report() -> dict[str, Any]:
 
 
 def expected_alert_event_id(source: str) -> str:
-    return f"risk_alert:{source}:risk_officer.reduce_exposure:gross_exposure"
+    alert = build_alert_report()["alerts"][0]
+    return _event_id(source, str(alert["action"]), alert)
 
 
 def evaluate_delivery(

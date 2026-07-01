@@ -270,6 +270,37 @@ class FakeBaostockClient:
             self.in_flight -= 1
 
 
+class FakeBaostockMinuteClient(FakeBaostockClient):
+    def query_history_k_data_plus(self, code, fields, start_date, end_date, frequency, adjustflag):
+        self.requests.append(
+            {
+                "code": code,
+                "fields": fields,
+                "start_date": start_date,
+                "end_date": end_date,
+                "frequency": frequency,
+                "adjustflag": adjustflag,
+            }
+        )
+        return FakeBaostockQueryResult(
+            pd.DataFrame(
+                [
+                    {
+                        "date": "2024-01-02",
+                        "time": "20240102093500000",
+                        "code": code,
+                        "open": "9.39",
+                        "high": "9.42",
+                        "low": "9.34",
+                        "close": "9.34",
+                        "volume": "9018600",
+                        "amount": "84582080",
+                    }
+                ]
+            )
+        )
+
+
 class ExpiringBaostockClient(FakeBaostockClient):
     def query_history_k_data_plus(self, code, fields, start_date, end_date, frequency, adjustflag):
         if len(self.requests) == 0 and self.login_count == 1:
@@ -334,6 +365,17 @@ def test_baostock_adapter_serializes_process_local_requests():
 
     assert client.max_in_flight == 1
     assert len(client.requests) == 3
+
+
+def test_baostock_minute_parses_provider_datetime_format():
+    client = FakeBaostockMinuteClient()
+    adapter = BaostockAdapter(client=client)
+
+    frame = adapter.minute("sz.000001", date(2024, 1, 2), date(2024, 1, 2), frequency="5")
+
+    assert client.requests[0]["adjustflag"] == "3"
+    assert client.requests[0]["frequency"] == "5"
+    assert frame.iloc[0]["timestamp"] == pd.Timestamp("2024-01-02 09:35:00")
 
 
 def test_baostock_adapter_has_no_financial_fundamental_entrypoint():

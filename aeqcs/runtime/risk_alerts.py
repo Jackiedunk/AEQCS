@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from hashlib import sha256
 from typing import Any
 
 from aeqcs.core.events import RiskAlert
+
+MAX_EVENT_ID_LENGTH = 100
 
 
 async def publish_strategy_risk_alerts(
@@ -35,7 +38,15 @@ async def publish_strategy_risk_alerts(
 
 def _event_id(source: str, action: str, alert: dict[str, Any]) -> str:
     suffix = alert.get("date") or alert.get("metric") or alert.get("symbol") or "alert"
-    return f"risk_alert:{source}:{action}:{_format_value(suffix)}"
+    event_id = f"risk_alert:{source}:{action}:{_format_value(suffix)}"
+    if len(event_id) <= MAX_EVENT_ID_LENGTH:
+        return event_id
+    source_digest = sha256(source.encode("utf-8")).hexdigest()[:16]
+    compact = f"risk_alert:{source_digest}:{action}:{_format_value(suffix)}"
+    if len(compact) <= MAX_EVENT_ID_LENGTH:
+        return compact
+    alert_digest = sha256(event_id.encode("utf-8")).hexdigest()[:24]
+    return f"risk_alert:{alert_digest}"
 
 
 def _message(source: str, action: str, alert: dict[str, Any]) -> str:
