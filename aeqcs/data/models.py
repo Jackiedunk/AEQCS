@@ -51,6 +51,9 @@ class FinancialIndicator:
             "profit_yoy",
             "debt_ratio",
             "current_ratio",
+            "quick_ratio",
+            "gross_margin",
+            "net_margin",
         )
         values = {key: Decimal(str(row[key])) for key in keys if row.get(key) is not None}
         return cls(

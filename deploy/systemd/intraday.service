@@ -4,6 +4,7 @@ Description=AEQCS intraday monitor
 [Service]
 Type=simple
 WorkingDirectory=/opt/aeqcs
+MemoryMax=16G
 ExecStart=/opt/aeqcs/.venv/bin/python -m aeqcs.runtime.intraday
 RuntimeMaxSec=21000
 Restart=on-failure

@@ -1,0 +1,10 @@
+[Unit]
+Description=AEQCS nightly PostgreSQL vacuum maintenance
+
+[Service]
+Type=oneshot
+User=aeqcs
+EnvironmentFile=-/etc/aeqcs/aeqcs.env
+WorkingDirectory=/opt/aeqcs
+MemoryMax=16G
+ExecStart=/usr/bin/psql "$AEQCS_PG_DSN" -v ON_ERROR_STOP=1 -f /opt/aeqcs/deploy/vacuum_maintenance.sql

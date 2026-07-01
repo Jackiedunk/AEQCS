@@ -1,0 +1,9 @@
+[Unit]
+Description=Run AEQCS nightly batch DAG
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 Asia/Shanghai
+Persistent=true
+
+[Install]
+WantedBy=timers.target

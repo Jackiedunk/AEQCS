@@ -6,6 +6,20 @@ from typing import Any
 
 from aeqcs.core.exceptions import GateBypassError
 from aeqcs.gate.proposals import ProposalStatus
+from aeqcs.gate.validator import assert_transition
+
+
+def approve_proposal_decision(
+    current_status: str | ProposalStatus,
+    approver_id: str,
+    decision: str,
+) -> ProposalStatus:
+    if not approver_id.strip():
+        raise ValueError("approver_id is required")
+    if decision != "promote":
+        raise ValueError(f"unsupported approval decision: {decision}")
+    assert_transition(current_status, ProposalStatus.PROMOTED)
+    return ProposalStatus.PROMOTED
 
 
 async def promote(conn: Any, proposal_id: int, reviewed_by: str) -> None:

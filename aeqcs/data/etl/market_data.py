@@ -5,9 +5,11 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any, cast
 
 import pandas as pd
 
+from aeqcs.core.versioning import require_date_value, require_finite_number, require_non_empty_text
 from aeqcs.data.models import DailyBar
 from aeqcs.data.quality.validator import validate_daily_bar
 
@@ -20,10 +22,12 @@ def normalize_daily_frame(df: pd.DataFrame) -> pd.DataFrame:
     if missing:
         raise ValueError(f"missing daily columns: {sorted(missing)}")
     out = df.copy()
-    out["symbol"] = out["symbol"].astype(str)
-    out["date"] = pd.to_datetime(out["date"]).dt.date
+    out["symbol"] = out["symbol"].map(lambda value: require_non_empty_text(value, "symbol"))
+    out["date"] = out["date"].map(lambda value: require_date_value(value, "date"))
     for col in ("open", "high", "low", "close", "amount"):
+        out[col] = out[col].map(lambda value, field=col: require_finite_number(value, field))
         out[col] = pd.to_numeric(out[col])
+    out["volume"] = out["volume"].map(lambda value: require_finite_number(value, "volume"))
     out["volume"] = pd.to_numeric(out["volume"]).astype("int64")
     return out.sort_values(["symbol", "date"]).reset_index(drop=True)
 
@@ -31,7 +35,7 @@ def normalize_daily_frame(df: pd.DataFrame) -> pd.DataFrame:
 def validate_daily_frame(df: pd.DataFrame) -> list[str]:
     errors: list[str] = []
     for row in normalize_daily_frame(df).to_dict("records"):
-        bar = DailyBar.from_mapping(row)
+        bar = DailyBar.from_mapping(cast(dict[str, Any], row))
         errors.extend(f"{bar.symbol} {bar.date}: {err}" for err in validate_daily_bar(bar))
     return errors
 

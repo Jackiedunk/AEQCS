@@ -10,7 +10,7 @@ from typing import Any
 
 
 def to_jsonable(value: Any) -> Any:
-    if is_dataclass(value):
+    if is_dataclass(value) and not isinstance(value, type):
         return to_jsonable(asdict(value))
     if isinstance(value, (date, datetime)):
         return value.isoformat()

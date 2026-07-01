@@ -12,4 +12,4 @@ def write_partitioned(df: pd.DataFrame, root: str | Path, partition_cols: list[s
 
 
 def read_parquet(path: str | Path, columns: list[str] | None = None) -> pd.DataFrame:
-    return pd.read_parquet(path, columns=columns, engine="pyarrow")
+    return pd.read_parquet(str(path), columns=columns)

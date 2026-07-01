@@ -1,4 +1,4 @@
-"""Immutable event schemas for deterministic and cognitive workflows."""
+"""Immutable event schemas for deterministic core workflows."""
 
 from __future__ import annotations
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=Run AEQCS PostgreSQL vacuum maintenance nightly
+
+[Timer]
+OnCalendar=Mon..Fri 23:40:00 Asia/Shanghai
+Persistent=true
+
+[Install]
+WantedBy=timers.target

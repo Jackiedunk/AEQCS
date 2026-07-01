@@ -6,6 +6,9 @@ rate_limits:
     burst: 2
     per_second: 0.5
     cooldown_after_fail: 1800
+  baostock:
+    daily_quota: 50000
+    concurrent: false
   scrapling:
     burst: 1
     per_second: 0.2
@@ -19,7 +22,8 @@ sources:
   news:
     - scrapling
     - akshare
-  minute: tushare
+  minute: baostock
+  daily_cross_check: baostock
 compliance:
   scrape_third_party_curated_products: false
 tushare_token: ${TUSHARE_TOKEN}

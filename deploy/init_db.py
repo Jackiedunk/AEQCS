@@ -43,6 +43,15 @@ CREATE TABLE IF NOT EXISTS stock_universe (
   ipo_date DATE, delist_date DATE, status VARCHAR(20)
 );
 
+CREATE TABLE IF NOT EXISTS corporate_actions (
+  symbol VARCHAR(10), effective_date DATE, action_type VARCHAR(20),
+  old_value VARCHAR(100), new_value VARCHAR(100), knowledge_ts TIMESTAMP,
+  source VARCHAR(50),
+  PRIMARY KEY(symbol,effective_date,action_type,knowledge_ts)
+);
+CREATE INDEX IF NOT EXISTS idx_corporate_actions_asof
+  ON corporate_actions(symbol,effective_date,knowledge_ts);
+
 CREATE TABLE IF NOT EXISTS suspend_info (
   symbol VARCHAR(10), date DATE, is_suspend BOOLEAN, PRIMARY KEY(symbol,date)
 );
@@ -56,7 +65,8 @@ CREATE TABLE IF NOT EXISTS financial_indicators (
   symbol VARCHAR(10), period VARCHAR(10), ann_date DATE, vintage INT DEFAULT 0,
   roe DECIMAL(8,4), eps DECIMAL(8,4), bps DECIMAL(8,4),
   revenue_yoy DECIMAL(8,4), profit_yoy DECIMAL(8,4),
-  debt_ratio DECIMAL(8,4), current_ratio DECIMAL(8,4),
+  debt_ratio DECIMAL(8,4), current_ratio DECIMAL(8,4), quick_ratio DECIMAL(8,4),
+  gross_margin DECIMAL(8,4), net_margin DECIMAL(8,4),
   PRIMARY KEY(symbol,period,ann_date,vintage)
 );
 CREATE INDEX IF NOT EXISTS idx_fin_asof
@@ -82,7 +92,8 @@ CREATE TABLE IF NOT EXISTS factor_values (
 );
 
 CREATE TABLE IF NOT EXISTS semantic_nodes (
-  node_id VARCHAR(100) PRIMARY KEY, name VARCHAR(200), type VARCHAR(50), level INT,
+  node_id VARCHAR(100) PRIMARY KEY, label VARCHAR(200), level VARCHAR(50),
+  created_by VARCHAR(50), as_of_date DATE, status VARCHAR(20) DEFAULT 'active',
   embedding vector(768), embed_model VARCHAR(50), aliases JSONB, created_at TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_sn_hnsw
@@ -91,8 +102,9 @@ CREATE INDEX IF NOT EXISTS idx_sn_hnsw
 CREATE TABLE IF NOT EXISTS semantic_edges (
   edge_id BIGSERIAL PRIMARY KEY, parent_id VARCHAR(100), child_id VARCHAR(100),
   relation_type VARCHAR(50), revenue_share DECIMAL(5,4),
-  source VARCHAR(50), confidence DECIMAL(4,3), verified BOOLEAN DEFAULT FALSE,
-  valid_from DATE, valid_to DATE
+  source VARCHAR(50), confidence DECIMAL(4,3), created_by VARCHAR(50),
+  verified BOOLEAN DEFAULT FALSE, verified_by VARCHAR(50), verified_as_of DATE,
+  retired_by VARCHAR(50), valid_from DATE, valid_to DATE
 );
 CREATE INDEX IF NOT EXISTS idx_se_parent ON semantic_edges(parent_id) WHERE verified;
 CREATE INDEX IF NOT EXISTS idx_se_child ON semantic_edges(child_id) WHERE verified;
@@ -115,9 +127,17 @@ CREATE TABLE IF NOT EXISTS proposals (
 );
 CREATE INDEX IF NOT EXISTS idx_prop_status ON proposals(status,kind);
 
+CREATE TABLE IF NOT EXISTS data_quality_alerts (
+  alert_id BIGSERIAL PRIMARY KEY, created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  alert_type VARCHAR(50), severity VARCHAR(20), source VARCHAR(50),
+  symbol VARCHAR(10), date DATE, payload JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_data_quality_alerts_type
+  ON data_quality_alerts(alert_type, created_ts DESC);
+
 CREATE TABLE IF NOT EXISTS decision_snapshot (
   snapshot_id BIGSERIAL PRIMARY KEY, decision_ts TIMESTAMP, role VARCHAR(50),
-  input_hash VARCHAR(64), input JSONB, llm_model VARCHAR(50), llm_output JSONB,
+  input_hash VARCHAR(64), input JSONB, output_model VARCHAR(50), output JSONB,
   embed_model VARCHAR(50)
 );
 CREATE INDEX IF NOT EXISTS idx_snap_hash ON decision_snapshot(input_hash);
@@ -169,12 +189,115 @@ CREATE TABLE IF NOT EXISTS backtest_results (
   parameters JSONB,
   fills JSONB,
   nav JSONB,
+  orders JSONB,
   created_ts TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS backtest_tasks (
+  task_id VARCHAR(64) PRIMARY KEY,
+  status VARCHAR(20),
+  strategy_name VARCHAR(100),
+  start_date DATE,
+  end_date DATE,
+  as_of_date DATE,
+  parameters JSONB,
+  result JSONB,
+  error TEXT,
+  created_ts TIMESTAMP,
+  updated_ts TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS event_log (
   event_id VARCHAR(100) PRIMARY KEY, channel VARCHAR(100), payload JSONB, created_ts TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS event_consumptions (
+  event_id VARCHAR(100) REFERENCES event_log(event_id) ON DELETE CASCADE,
+  consumer_id VARCHAR(100),
+  consumed_ts TIMESTAMP,
+  PRIMARY KEY(event_id, consumer_id)
+);
+
+ALTER TABLE minute_bar_hot SET (
+  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_analyze_scale_factor = 0.01,
+  autovacuum_vacuum_threshold = 5000,
+  autovacuum_analyze_threshold = 2500
+);
+ALTER TABLE factor_values SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 5000,
+  autovacuum_analyze_threshold = 2500
+);
+ALTER TABLE event_log SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 2000,
+  autovacuum_analyze_threshold = 1000
+);
+ALTER TABLE event_consumptions SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 2000,
+  autovacuum_analyze_threshold = 1000
+);
+ALTER TABLE news_raw SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 2000,
+  autovacuum_analyze_threshold = 1000
+);
+ALTER TABLE proposals SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 1000,
+  autovacuum_analyze_threshold = 500
+);
+ALTER TABLE signal_log SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 1000,
+  autovacuum_analyze_threshold = 500
+);
+ALTER TABLE cooccurrence_cache SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 1000,
+  autovacuum_analyze_threshold = 500
+);
+ALTER TABLE doc_chunks SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 1000,
+  autovacuum_analyze_threshold = 500
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'aeqcs_mcp') THEN
+    CREATE ROLE aeqcs_mcp LOGIN PASSWORD 'CHANGE_ME_AEQCS_MCP';
+  END IF;
+END
+$$;
+
+REVOKE ALL ON SCHEMA public FROM aeqcs_mcp;
+GRANT USAGE ON SCHEMA public TO aeqcs_mcp;
+
+GRANT SELECT ON stock_daily_origin, financial_indicators TO aeqcs_mcp;
+GRANT SELECT ON index_constituents TO aeqcs_mcp;
+GRANT SELECT ON factor_values, backtest_results, backtest_tasks, uploaded_docs, doc_chunks TO aeqcs_mcp;
+GRANT SELECT, INSERT, UPDATE ON proposals TO aeqcs_mcp;
+GRANT SELECT, INSERT, UPDATE ON factor_values, backtest_results TO aeqcs_mcp;
+GRANT SELECT, INSERT, UPDATE ON backtest_tasks TO aeqcs_mcp;
+GRANT SELECT, INSERT, UPDATE ON uploaded_docs, doc_chunks TO aeqcs_mcp;
+GRANT SELECT, INSERT, UPDATE ON semantic_nodes, semantic_edges TO aeqcs_mcp;
+GRANT SELECT, INSERT ON event_log TO aeqcs_mcp;
+GRANT SELECT, INSERT ON event_consumptions TO aeqcs_mcp;
+GRANT USAGE, SELECT ON SEQUENCE proposals_proposal_id_seq TO aeqcs_mcp;
+GRANT USAGE, SELECT ON SEQUENCE uploaded_docs_doc_id_seq TO aeqcs_mcp;
+GRANT USAGE, SELECT ON SEQUENCE doc_chunks_chunk_id_seq TO aeqcs_mcp;
+GRANT USAGE, SELECT ON SEQUENCE semantic_edges_edge_id_seq TO aeqcs_mcp;
 """
 
 

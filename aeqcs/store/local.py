@@ -6,17 +6,65 @@ import json
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
-from aeqcs.core.versioning import assert_not_after, require_as_of
+from aeqcs.core.versioning import (
+    assert_not_after,
+    require_as_of,
+    require_date_value,
+    require_datetime_value,
+    require_finite_number,
+    require_non_empty_text,
+    require_valid_date_range,
+)
+from aeqcs.data.etl.adjustment import apply_dual_price_adjustment
 from aeqcs.data.etl.financial_data import normalize_financial_frame, pit_slice
 from aeqcs.data.etl.market_data import normalize_daily_frame
+from aeqcs.gate.promote import approve_proposal_decision
 from aeqcs.gate.proposals import ProposalReview
 from aeqcs.gate.validator import assert_transition
 from aeqcs.ingest.document_parser import DocumentChunk, ParsedDocument
+from aeqcs.knowledge.universe_builder import is_generic_parent_values, normalize_universe_label
 from aeqcs.strategy.backtest.engine import BacktestReport
+
+
+def _records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    return cast(list[dict[str, Any]], frame.to_dict("records"))
+
+
+def _normalize_index_constituents_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    required = {"index_code", "symbol", "in_date", "out_date"}
+    missing = required - set(frame.columns)
+    if missing:
+        raise ValueError(f"missing index constituent columns: {sorted(missing)}")
+    out = frame.copy()
+    out["index_code"] = out["index_code"].map(lambda value: require_non_empty_text(value, "index_code"))
+    out["symbol"] = out["symbol"].map(lambda value: require_non_empty_text(value, "symbol"))
+    out["in_date"] = out["in_date"].map(lambda value: require_date_value(value, "in_date"))
+    out["out_date"] = out["out_date"].map(lambda value: _optional_index_date_value(value, "out_date"))
+    return out
+
+
+def _normalize_stock_universe_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    required = {"symbol", "name", "ipo_date", "delist_date", "status"}
+    missing = required - set(frame.columns)
+    if missing:
+        raise ValueError(f"missing stock universe columns: {sorted(missing)}")
+    out = frame.copy()
+    out["symbol"] = out["symbol"].map(lambda value: require_non_empty_text(value, "symbol"))
+    out["name"] = out["name"].map(lambda value: require_non_empty_text(value, "name"))
+    out["ipo_date"] = out["ipo_date"].map(lambda value: require_date_value(value, "ipo_date"))
+    out["delist_date"] = out["delist_date"].map(lambda value: _optional_index_date_value(value, "delist_date"))
+    out["status"] = out["status"].map(lambda value: require_non_empty_text(value, "status"))
+    return out
+
+
+def _require_positive_integer_id(value: int, field: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"{field} must be a positive integer")
+    return value
 
 
 class LocalStore:
@@ -30,8 +78,12 @@ class LocalStore:
         self.proposals_path = self.root / "proposals.csv"
         self.backtest_results_path = self.root / "backtest_results.csv"
         self.factor_values_path = self.root / "factor_values.csv"
+        self.index_constituents_path = self.root / "index_constituents.csv"
+        self.stock_universe_path = self.root / "stock_universe.csv"
         self.docs_path = self.root / "uploaded_docs.csv"
         self.chunks_path = self.root / "doc_chunks.csv"
+        self.universe_nodes_path = self.root / "semantic_nodes.csv"
+        self.universe_edges_path = self.root / "semantic_edges.csv"
 
     def load_daily(self) -> pd.DataFrame:
         if not self.daily_path.exists():
@@ -58,6 +110,9 @@ class LocalStore:
                     "profit_yoy",
                     "debt_ratio",
                     "current_ratio",
+                    "quick_ratio",
+                    "gross_margin",
+                    "net_margin",
                 ]
             )
         return normalize_financial_frame(pd.read_csv(self.financial_path, dtype={"symbol": str, "period": str}))
@@ -72,21 +127,73 @@ class LocalStore:
         end_date: date | None = None,
         as_of_date: date | None = None,
     ) -> list[dict[str, Any]]:
-        require_as_of(as_of_date)
+        symbol = require_non_empty_text(symbol, "symbol")
+        checked_as_of = require_as_of(as_of_date)
+        if start_date is not None and end_date is not None:
+            require_valid_date_range(start_date, end_date)
         if end_date is not None:
-            assert_not_after(end_date, as_of_date)
+            assert_not_after(end_date, checked_as_of)
         frame = self.load_daily()
         if frame.empty:
             return []
-        subset = frame[(frame["symbol"] == symbol) & (frame["date"] <= as_of_date)]
+        subset = frame[(frame["symbol"] == symbol) & (frame["date"] <= checked_as_of)]
         if start_date is not None:
             subset = subset[subset["date"] >= start_date]
         if end_date is not None:
             subset = subset[subset["date"] <= end_date]
-        return subset.sort_values("date").to_dict("records")
+        if "adj_factor" in subset.columns and not subset.empty:
+            subset = apply_dual_price_adjustment(subset)
+        return _records(subset.sort_values("date"))
 
     def get_financials(self, symbol: str, period: str, as_of_date: date | None = None) -> dict[str, Any]:
+        symbol = require_non_empty_text(symbol, "symbol")
+        period = require_non_empty_text(period, "period")
         return pit_slice(self.load_financials(), symbol, period, as_of_date)
+
+    def get_index_constituents(
+        self,
+        index_code: str,
+        as_of_date: date | None = None,
+    ) -> list[dict[str, Any]]:
+        index_code = require_non_empty_text(index_code, "index_code")
+        checked_as_of = require_as_of(as_of_date)
+        if not self.index_constituents_path.exists():
+            return []
+        frame = _normalize_index_constituents_frame(
+            pd.read_csv(self.index_constituents_path, dtype={"index_code": str, "symbol": str})
+        )
+        if frame.empty:
+            return []
+        active_out_date = frame["out_date"].map(lambda value: value is None or value > checked_as_of)
+        subset = frame[
+            (frame["index_code"] == index_code)
+            & (frame["in_date"] <= checked_as_of)
+            & active_out_date
+        ].copy()
+        subset = subset.sort_values(["symbol", "in_date"])
+        subset["in_date"] = subset["in_date"].map(lambda value: value.isoformat())
+        subset["out_date"] = subset["out_date"].map(
+            lambda value: None if value is None else value.isoformat()
+        )
+        return _records(subset)
+
+    def get_active_stock_universe(self, as_of_date: date | None = None) -> list[dict[str, Any]]:
+        checked_as_of = require_as_of(as_of_date)
+        if not self.stock_universe_path.exists():
+            return []
+        frame = _normalize_stock_universe_frame(
+            pd.read_csv(self.stock_universe_path, dtype={"symbol": str, "name": str, "status": str})
+        )
+        if frame.empty:
+            return []
+        active_delist_date = frame["delist_date"].map(lambda value: value is None or value > checked_as_of)
+        subset = frame[(frame["ipo_date"] <= checked_as_of) & active_delist_date].copy()
+        subset = subset.sort_values(["symbol", "ipo_date"])
+        subset["ipo_date"] = subset["ipo_date"].map(lambda value: value.isoformat())
+        subset["delist_date"] = subset["delist_date"].map(
+            lambda value: None if value is None else value.isoformat()
+        )
+        return _records(subset)
 
     def submit_proposal(self, proposal: Any) -> int:
         payload = asdict(proposal) if hasattr(proposal, "__dataclass_fields__") else dict(proposal)
@@ -99,6 +206,7 @@ class LocalStore:
         return proposal_id
 
     def get_proposal_status(self, proposal_id: int) -> dict[str, Any]:
+        proposal_id = _require_positive_integer_id(proposal_id, "proposal_id")
         if not self.proposals_path.exists():
             return {}
         frame = pd.read_csv(self.proposals_path)
@@ -109,10 +217,11 @@ class LocalStore:
         return {"status": row.get("status", ""), "result": row}
 
     def review_proposal(self, review: ProposalReview) -> dict[str, Any]:
+        proposal_id = _require_positive_integer_id(review.proposal_id, "proposal_id")
         if not self.proposals_path.exists():
             return {}
         frame = pd.read_csv(self.proposals_path)
-        mask = frame["proposal_id"] == review.proposal_id
+        mask = frame["proposal_id"] == proposal_id
         if not mask.any():
             return {}
         current = str(frame.loc[mask, "status"].iloc[-1])
@@ -127,18 +236,40 @@ class LocalStore:
                 default=str,
             )
         frame.to_csv(self.proposals_path, index=False)
-        return self.get_proposal_status(review.proposal_id)
+        return self.get_proposal_status(proposal_id)
+
+    def approve_proposal(self, proposal_id: int, approver_id: str, decision: str) -> dict[str, Any]:
+        proposal_id = _require_positive_integer_id(proposal_id, "proposal_id")
+        if not self.proposals_path.exists():
+            return {}
+        frame = pd.read_csv(self.proposals_path)
+        mask = frame["proposal_id"] == proposal_id
+        if not mask.any():
+            return {}
+        current = str(frame.loc[mask, "status"].iloc[-1])
+        target = approve_proposal_decision(current, approver_id, decision)
+        if "review_reason" not in frame.columns:
+            frame["review_reason"] = ""
+        frame["review_reason"] = frame["review_reason"].fillna("").astype(str)
+        frame.loc[mask, "status"] = target.value
+        frame.loc[mask, "reviewed_by"] = approver_id
+        frame.loc[mask, "review_reason"] = f"approve_proposal:{decision}"
+        frame.to_csv(self.proposals_path, index=False)
+        return self.get_proposal_status(proposal_id)
 
     def save_backtest_result(self, report: BacktestReport) -> str:
+        backtest_result_id = require_non_empty_text(report.backtest_result_id, "backtest_result_id")
+        strategy_name = require_non_empty_text(report.strategy_name, "strategy_name")
         payload = {
-            "backtest_result_id": report.backtest_result_id,
-            "strategy_name": report.strategy_name,
+            "backtest_result_id": backtest_result_id,
+            "strategy_name": strategy_name,
             "start_date": report.start_date.isoformat(),
             "end_date": report.end_date.isoformat(),
             "as_of_date": report.as_of_date.isoformat(),
             "parameters": json.dumps(report.parameters, ensure_ascii=False, default=str),
             "fills": json.dumps([asdict(fill) for fill in report.fills], ensure_ascii=False, default=str),
             "nav": json.dumps(report.nav, ensure_ascii=False, default=str),
+            "orders": json.dumps(report.orders, ensure_ascii=False, default=str),
         }
         existing = (
             pd.read_csv(self.backtest_results_path, dtype={"backtest_result_id": str})
@@ -148,9 +279,10 @@ class LocalStore:
         merged = pd.concat([existing, pd.DataFrame([payload])], ignore_index=True)
         merged = merged.drop_duplicates(["backtest_result_id"], keep="last")
         merged.to_csv(self.backtest_results_path, index=False)
-        return report.backtest_result_id
+        return backtest_result_id
 
     def get_backtest_result(self, backtest_result_id: str) -> dict[str, Any]:
+        backtest_result_id = require_non_empty_text(backtest_result_id, "backtest_result_id")
         if not self.backtest_results_path.exists():
             return {}
         frame = pd.read_csv(self.backtest_results_path, dtype={"backtest_result_id": str})
@@ -167,12 +299,23 @@ class LocalStore:
             "parameters": json.loads(row["parameters"]),
             "fills": json.loads(row["fills"]),
             "nav": json.loads(row["nav"]),
+            "orders": json.loads(row.get("orders", "[]")),
         }
 
     def save_factor_values(self, values: list[dict[str, Any]]) -> int:
         if not values:
             return 0
-        incoming = pd.DataFrame(values)
+        normalized_values = []
+        for row in values:
+            normalized = dict(row)
+            normalized["symbol"] = require_non_empty_text(row["symbol"], "symbol")
+            normalized["factor_id"] = require_non_empty_text(row["factor_id"], "factor_id")
+            normalized["version"] = _require_positive_integer_id(row.get("version", 1), "version")
+            normalized["value"] = require_finite_number(row["value"], "value")
+            normalized["date"] = require_date_value(row["date"], "date")
+            normalized["calc_timestamp"] = require_datetime_value(row["calc_timestamp"], "calc_timestamp")
+            normalized_values.append(normalized)
+        incoming = pd.DataFrame(normalized_values)
         incoming["symbol"] = incoming["symbol"].astype(str)
         incoming["date"] = pd.to_datetime(incoming["date"]).dt.date
         incoming["factor_id"] = incoming["factor_id"].astype(str)
@@ -196,6 +339,7 @@ class LocalStore:
         as_of_date: date,
     ) -> list[dict[str, Any]]:
         require_as_of(as_of_date)
+        require_valid_date_range(start_date, end_date)
         assert_not_after(end_date, as_of_date)
         if not self.factor_values_path.exists():
             return []
@@ -211,7 +355,7 @@ class LocalStore:
         subset = subset.sort_values(["factor_id", "symbol", "date"]).copy()
         subset["date"] = subset["date"].map(lambda value: value.isoformat())
         subset["calc_timestamp"] = subset["calc_timestamp"].map(lambda value: value.isoformat())
-        return subset.to_dict("records")
+        return _records(subset)
 
     def save_uploaded_doc(self, document: ParsedDocument, chunks: list[DocumentChunk]) -> dict[str, Any]:
         docs = (
@@ -256,6 +400,7 @@ class LocalStore:
         return {"doc_id": doc_id, "sha256": document.sha256, "chunks": len(chunks)}
 
     def get_uploaded_doc(self, sha256: str) -> dict[str, Any]:
+        sha256 = require_non_empty_text(sha256, "sha256")
         if not self.docs_path.exists():
             return {}
         docs = pd.read_csv(self.docs_path, dtype={"sha256": str})
@@ -269,7 +414,213 @@ class LocalStore:
             chunks = (
                 chunk_frame[chunk_frame["doc_sha256"] == sha256]
                 .sort_values("seq")[["seq", "text"]]
-                .to_dict("records")
+                .pipe(_records)
             )
         row["chunks"] = chunks
-        return row
+        return cast(dict[str, Any], row)
+
+    def save_universe_node(self, node: dict[str, Any]) -> str:
+        node_id = require_non_empty_text(node["node_id"], "node_id")
+        label = require_non_empty_text(node["label"], "label")
+        level = require_non_empty_text(node["level"], "level")
+        created_by = require_non_empty_text(node["created_by"], "created_by")
+        existing = (
+            pd.read_csv(self.universe_nodes_path, dtype={"node_id": str})
+            if self.universe_nodes_path.exists()
+            else pd.DataFrame()
+        )
+        row = {
+            "node_id": node_id,
+            "label": label,
+            "level": level,
+            "created_by": created_by,
+            "as_of_date": _date_value(node["as_of_date"]).isoformat(),
+            "status": node.get("status", "active"),
+        }
+        normalized_label = normalize_universe_label(str(row["label"]))
+        if not existing.empty and "label" in existing.columns:
+            duplicate = existing[
+                (existing["node_id"].astype(str) != str(row["node_id"]))
+                & (existing["label"].astype(str).map(normalize_universe_label) == normalized_label)
+            ]
+            if not duplicate.empty:
+                raise ValueError(f"synonym duplicate node label: {row['label']}")
+        merged = pd.concat([existing, pd.DataFrame([row])], ignore_index=True)
+        merged = merged.drop_duplicates(["node_id"], keep="last")
+        merged.to_csv(self.universe_nodes_path, index=False)
+        return str(row["node_id"])
+
+    def save_universe_edge(self, edge: dict[str, Any]) -> int:
+        edge_id = (
+            _require_positive_integer_id(edge["edge_id"], "edge_id")
+            if edge.get("edge_id") is not None
+            else None
+        )
+        parent_id = require_non_empty_text(edge["parent_id"], "parent_id")
+        child_id = require_non_empty_text(edge["child_id"], "child_id")
+        relation_type = require_non_empty_text(edge["relation_type"], "relation_type")
+        created_by = require_non_empty_text(edge["created_by"], "created_by")
+        self._require_universe_node(parent_id, "parent")
+        self._require_universe_node(child_id, "child")
+        self._reject_generic_parent_node(parent_id)
+        existing = (
+            pd.read_csv(self.universe_edges_path)
+            if self.universe_edges_path.exists()
+            else pd.DataFrame()
+        )
+        if edge_id is None:
+            edge_id = int(existing["edge_id"].max() + 1 if not existing.empty else 1)
+        row = {
+            "edge_id": edge_id,
+            "parent_id": parent_id,
+            "child_id": child_id,
+            "relation_type": relation_type,
+            "created_by": created_by,
+            "verified": bool(edge.get("verified", False)),
+            "verified_by": edge.get("verified_by"),
+            "verified_as_of": _optional_date_value(edge.get("verified_as_of")),
+            "retired_by": edge.get("retired_by"),
+            "valid_from": _date_value(edge["as_of_date"]).isoformat(),
+            "valid_to": _optional_date_value(edge.get("valid_to")),
+        }
+        merged = pd.concat([existing, pd.DataFrame([row])], ignore_index=True)
+        merged = merged.drop_duplicates(["edge_id"], keep="last")
+        merged.to_csv(self.universe_edges_path, index=False)
+        return edge_id
+
+    def verify_universe_edge(self, edge_id: int, verified_by: str, as_of_date: date) -> dict[str, Any]:
+        edge_id = _require_positive_integer_id(edge_id, "edge_id")
+        verified_by = require_non_empty_text(verified_by, "verified_by")
+        frame = self._load_universe_edges()
+        mask = frame["edge_id"] == edge_id
+        if not mask.any():
+            return {}
+        frame.loc[mask, "verified"] = True
+        frame.loc[mask, "verified_by"] = verified_by
+        frame.loc[mask, "verified_as_of"] = as_of_date.isoformat()
+        frame.to_csv(self.universe_edges_path, index=False)
+        return cast(dict[str, Any], frame[mask].iloc[-1].to_dict())
+
+    def retire_universe_edge(self, edge_id: int, retired_by: str, as_of_date: date) -> dict[str, Any]:
+        edge_id = _require_positive_integer_id(edge_id, "edge_id")
+        retired_by = require_non_empty_text(retired_by, "retired_by")
+        frame = self._load_universe_edges()
+        mask = frame["edge_id"] == edge_id
+        if not mask.any():
+            return {}
+        frame.loc[mask, "retired_by"] = retired_by
+        frame.loc[mask, "valid_to"] = as_of_date.isoformat()
+        frame.to_csv(self.universe_edges_path, index=False)
+        return cast(dict[str, Any], frame[mask].iloc[-1].to_dict())
+
+    def get_universe_children_as_of(self, parent_id: str, as_of_date: date) -> list[str]:
+        parent_id = require_non_empty_text(parent_id, "parent_id")
+        if not self.universe_edges_path.exists():
+            return []
+        frame = self._load_universe_edges()
+        checked_as_of = pd.Timestamp(as_of_date)
+        verified_as_of = pd.to_datetime(frame["verified_as_of"], errors="coerce")
+        valid_to = pd.to_datetime(frame["valid_to"], errors="coerce")
+        subset = frame[
+            (frame["parent_id"] == parent_id)
+            & (frame["verified"].astype(str).str.lower().isin(["true", "1"]))
+            & (verified_as_of <= checked_as_of)
+            & (valid_to.isna() | (valid_to > checked_as_of))
+        ]
+        return [str(value) for value in subset.sort_values(["child_id", "edge_id"])["child_id"].tolist()]
+
+    def search_semantic_nodes(
+        self,
+        query: str,
+        as_of_date: date,
+        query_embedding: list[float] | None = None,
+    ) -> list[dict[str, Any]]:
+        del query_embedding
+        term = normalize_universe_label(query)
+        if not term:
+            raise ValueError("query must not be empty")
+        if not self.universe_nodes_path.exists():
+            return []
+        frame = pd.read_csv(self.universe_nodes_path, dtype={"node_id": str, "label": str, "level": str})
+        if frame.empty:
+            return []
+        frame["as_of_date"] = pd.to_datetime(frame["as_of_date"]).dt.date
+        if "status" not in frame.columns:
+            frame["status"] = "active"
+        subset = frame[(frame["as_of_date"] <= as_of_date) & (frame["status"].astype(str) == "active")].copy()
+        if subset.empty:
+            return []
+        subset["normalized_label"] = subset["label"].astype(str).map(normalize_universe_label)
+        subset["normalized_node_id"] = subset["node_id"].astype(str).map(normalize_universe_label)
+        subset = subset[
+            subset["normalized_label"].str.contains(term, regex=False)
+            | subset["normalized_node_id"].str.contains(term, regex=False)
+        ].copy()
+        if subset.empty:
+            return []
+        subset["score"] = 1.0
+        subset = subset.sort_values(["score", "label", "node_id"], ascending=[False, True, True])
+        subset["as_of_date"] = subset["as_of_date"].map(lambda value: value.isoformat())
+        return _records(subset[["node_id", "label", "level", "as_of_date", "status", "score"]])
+
+    def _load_universe_edges(self) -> pd.DataFrame:
+        if not self.universe_edges_path.exists():
+            return pd.DataFrame(
+                columns=[
+                    "edge_id",
+                    "parent_id",
+                    "child_id",
+                    "relation_type",
+                    "created_by",
+                    "verified",
+                    "verified_by",
+                    "verified_as_of",
+                    "retired_by",
+                    "valid_from",
+                    "valid_to",
+                ]
+            )
+        return pd.read_csv(
+            self.universe_edges_path,
+            dtype={
+                "parent_id": str,
+                "child_id": str,
+                "verified_by": object,
+                "verified_as_of": object,
+                "retired_by": object,
+                "valid_to": object,
+            },
+        )
+
+    def _require_universe_node(self, node_id: str, label: str) -> None:
+        if not self.universe_nodes_path.exists():
+            raise ValueError(f"{label} node does not exist")
+        nodes = pd.read_csv(self.universe_nodes_path, dtype={"node_id": str})
+        if not (nodes["node_id"] == node_id).any():
+            raise ValueError(f"{label} node does not exist")
+
+    def _reject_generic_parent_node(self, node_id: str) -> None:
+        nodes = pd.read_csv(self.universe_nodes_path, dtype={"node_id": str})
+        row = nodes[nodes["node_id"] == node_id].iloc[-1]
+        if is_generic_parent_values(str(row["label"]), str(row["level"])):
+            raise ValueError("parent node is too generic")
+
+
+def _date_value(value: Any) -> date:
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value))
+
+
+def _optional_index_date_value(value: Any, field: str) -> date | None:
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return require_date_value(value, field)
+
+
+def _optional_date_value(value: Any) -> str | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    return _date_value(value).isoformat()

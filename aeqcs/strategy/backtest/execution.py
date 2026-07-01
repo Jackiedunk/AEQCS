@@ -28,10 +28,21 @@ def buy_price_with_slippage(open_price: Decimal, config: ExecutionConfig) -> Dec
     return open_price * (Decimal("1") + config.slippage_bps / Decimal("10000"))
 
 
+def sell_price_with_slippage(open_price: Decimal, config: ExecutionConfig) -> Decimal:
+    return open_price * (Decimal("1") - config.slippage_bps / Decimal("10000"))
+
+
 def buy_fee(quantity: int, price: Decimal, config: ExecutionConfig) -> Decimal:
     if quantity <= 0:
         return Decimal("0")
     fee = Decimal(quantity) * price * config.fee_rate
+    return max(fee, config.min_fee)
+
+
+def sell_fee(quantity: int, price: Decimal, config: ExecutionConfig) -> Decimal:
+    if quantity >= 0:
+        return Decimal("0")
+    fee = Decimal(abs(quantity)) * price * config.fee_rate
     return max(fee, config.min_fee)
 
 

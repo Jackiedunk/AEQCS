@@ -1,0 +1,11 @@
+[Unit]
+Description=AEQCS restore rehearsal
+
+[Service]
+Type=oneshot
+User=aeqcs
+EnvironmentFile=-/etc/aeqcs/aeqcs.env
+Environment=AEQCS_RESTORE_PG_DSN=postgresql://aeqcs_restore:CHANGE_ME_AEQCS_RESTORE@127.0.0.1/aeqcs_restore
+WorkingDirectory=/opt/aeqcs
+MemoryMax=16G
+ExecStart=/opt/aeqcs/.venv/bin/python -m aeqcs.runtime.batch restore-rehearsal

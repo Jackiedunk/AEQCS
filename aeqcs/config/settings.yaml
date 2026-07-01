@@ -8,9 +8,14 @@ database:
   core:
     url: postgresql+asyncpg://aeqcs_core:CHANGE_ME@localhost/aeqcs
     pool_size: 8
-  cognitive:
-    url: postgresql+asyncpg://aeqcs_cog:CHANGE_ME@localhost/aeqcs
-    pool_size: 4
+  connection_budget:
+    max_connections: 20
+    batch_connections: 4
+    intraday_connections: 4
+    maintenance_connections: 2
+    reserved_connections: 2
+resources:
+  cgroup_memory_max: 16G
 duckdb:
   memory_limit: 4GB
   threads: 6
@@ -20,19 +25,23 @@ qlib:
   mount_parquet: true
 memory:
   batch_chunk_symbols: 500
-llm:
-  provider: api
-  model: CHANGE_ME
-  max_retries: 3
-  cache: true
 embedding:
-  model: bge-base-zh
+  provider: sentence-transformers
+  model: BAAI/bge-base-zh-v1.5
   device: cpu
   batch: 64
+  max_resident_mb: 1024
 thresholds:
   spike_pct: 0.05
   drawdown_warn: 0.05
   drawdown_red: 0.10
   factor_ic_min: 0.02
   proposal_conf_min: 0.6
+validation:
+  train_window_days: 504
+  test_window_days: 63
+  step_days: 63
+  embargo_days: 5
+  min_annualized_return: 0.08
+  max_drawdown: 0.15
 trading_calendar: tushare

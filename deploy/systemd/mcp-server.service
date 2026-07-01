@@ -1,0 +1,26 @@
+[Unit]
+Description=AEQCS deterministic core MCP HTTP/SSE server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/aeqcs
+Environment=AEQCS_MCP_TRANSPORT=sse
+Environment=AEQCS_MCP_HOST=127.0.0.1
+Environment=AEQCS_MCP_PORT=8000
+Environment=AEQCS_LOG_LEVEL=INFO
+Environment=AEQCS_CORE_PG_DSN=postgresql://aeqcs_mcp:CHANGE_ME_AEQCS_MCP@127.0.0.1/aeqcs
+Environment=AEQCS_MCP_POOL_SIZE=8
+MemoryMax=16G
+ExecStart=/opt/aeqcs/.venv/bin/python -m aeqcs.core.mcp_server
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/aeqcs/data /opt/aeqcs/logs
+
+[Install]
+WantedBy=multi-user.target

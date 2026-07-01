@@ -1,22 +1,168 @@
 factors:
+  - id: momentum_1d
+    category: technical
+    engine: duckdb
+    compute: "close / lag(close, 1) - 1"
+    window_type: historical
+    lookback_days: 1
   - id: momentum_20d
     category: technical
-    qlib_expr: "Ref($close, 20) / $close - 1"
+    engine: duckdb
+    compute: "close / lag(close, 20) - 1"
+    window_type: historical
+    lookback_days: 20
     preprocess: [winsorize, industry_neutralize, zscore]
   - id: roe_quarterly
     category: fundamental
+    engine: duckdb
     compute: financials.roe
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: debt_ratio_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.debt_ratio
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: equity_ratio_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: 1 - financials.debt_ratio
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: debt_to_equity_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.debt_ratio / (1 - financials.debt_ratio)
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: profit_yoy_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.profit_yoy
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: current_ratio_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.current_ratio
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: quick_ratio_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.quick_ratio
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: revenue_yoy_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.revenue_yoy
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: eps_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.eps
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: bps_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.bps
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: gross_margin_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.gross_margin
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: net_margin_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.net_margin
+    window_type: historical
+    align: ann_date
+    update_freq: quarterly
+  - id: margin_spread_quarterly
+    category: fundamental
+    engine: duckdb
+    compute: financials.gross_margin - financials.net_margin
+    window_type: historical
     align: ann_date
     update_freq: quarterly
   - id: north_flow_5d
     category: moneyflow
+    engine: duckdb
     compute: "sum(moneyflow.net_inflow,5)/market_cap"
+    window_type: historical
     preprocess: [winsorize, sector_neutralize]
   - id: news_sentiment_1d
     category: sentiment
+    engine: duckdb
     compute: "mean(news.sentiment, last 1 day)"
+    window_type: historical
     preprocess: [zscore]
   - id: concept_heat
     category: alternative
+    engine: duckdb
     compute: "concept.news_frequency*concept.price_correlation"
+    window_type: historical
+    update_freq: daily
+  - id: risk_size
+    category: risk
+    factor_type: risk
+    engine: duckdb
+    compute: "log(market_cap)"
+    window_type: historical
+    update_freq: daily
+  - id: risk_valuation
+    category: risk
+    factor_type: risk
+    engine: duckdb
+    compute: "1 / pe_ttm"
+    window_type: historical
+    update_freq: daily
+  - id: risk_momentum
+    category: risk
+    factor_type: risk
+    engine: duckdb
+    compute: "close / lag(close, 20) - 1"
+    window_type: historical
+    lookback_days: 20
+    update_freq: daily
+  - id: risk_volatility
+    category: risk
+    factor_type: risk
+    engine: duckdb
+    compute: "stddev(close / lag(close, 1) - 1, 20)"
+    window_type: historical
+    lookback_days: 20
+    update_freq: daily
+  - id: risk_liquidity
+    category: risk
+    factor_type: risk
+    engine: duckdb
+    compute: "log(avg(amount, 20))"
+    window_type: historical
+    lookback_days: 20
+    update_freq: daily
+  - id: risk_industry_l1
+    category: industry
+    factor_type: risk
+    engine: duckdb
+    compute: "semantic_nodes.level_1_industry_dummy"
+    window_type: historical
     update_freq: daily

@@ -24,7 +24,6 @@ def daily_news_sentiment(news: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=["symbol", "date", "news_sentiment_1d"])
     return (
         pd.DataFrame(rows)
-        .groupby(["symbol", "date"], as_index=False)["sentiment"]
-        .mean()
-        .rename(columns={"sentiment": "news_sentiment_1d"})
+        .groupby(["symbol", "date"], as_index=False)
+        .agg(news_sentiment_1d=("sentiment", "mean"))
     )
