@@ -17,6 +17,7 @@ MCP_ROLE = "aeqcs_mcp"
 
 REQUIRED_TABLE_PRIVILEGES: dict[str, set[str]] = {
     "stock_daily_origin": {"SELECT"},
+    "adj_factor": {"SELECT"},
     "financial_indicators": {"SELECT"},
     "index_constituents": {"SELECT"},
     "factor_values": {"SELECT", "INSERT", "UPDATE"},
@@ -33,6 +34,7 @@ REQUIRED_TABLE_PRIVILEGES: dict[str, set[str]] = {
 
 FORBIDDEN_TABLE_PRIVILEGES: dict[str, set[str]] = {
     "stock_daily_origin": {"INSERT", "UPDATE", "DELETE"},
+    "adj_factor": {"INSERT", "UPDATE", "DELETE"},
     "financial_indicators": {"INSERT", "UPDATE", "DELETE"},
     "index_constituents": {"INSERT", "UPDATE", "DELETE"},
     "event_log": {"UPDATE", "DELETE"},
@@ -87,8 +89,12 @@ async def _fetch_table_grants(dsn: str) -> list[dict[str, Any]]:
         await conn.close()
 
 
+def select_audit_dsn(env: dict[str, str]) -> str | None:
+    return env.get("AEQCS_CORE_PG_DSN") or env.get("AEQCS_PG_DSN")
+
+
 async def _main() -> int:
-    dsn = os.environ.get("AEQCS_PG_DSN") or os.environ.get("AEQCS_CORE_PG_DSN")
+    dsn = select_audit_dsn(os.environ)
     if not dsn:
         print("AEQCS_PG_DSN or AEQCS_CORE_PG_DSN is required", file=sys.stderr)
         return 2

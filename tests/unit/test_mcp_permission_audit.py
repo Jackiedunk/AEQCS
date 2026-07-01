@@ -2,6 +2,7 @@ from scripts.verify_mcp_permissions import (
     FORBIDDEN_TABLE_PRIVILEGES,
     REQUIRED_TABLE_PRIVILEGES,
     audit_table_privileges,
+    select_audit_dsn,
 )
 
 
@@ -38,7 +39,19 @@ def test_mcp_permission_audit_rejects_authoritative_table_write_grants():
 
 def test_mcp_permission_audit_tracks_forbidden_tables_explicitly():
     assert FORBIDDEN_TABLE_PRIVILEGES["stock_daily_origin"] == {"INSERT", "UPDATE", "DELETE"}
+    assert FORBIDDEN_TABLE_PRIVILEGES["adj_factor"] == {"INSERT", "UPDATE", "DELETE"}
     assert FORBIDDEN_TABLE_PRIVILEGES["financial_indicators"] == {"INSERT", "UPDATE", "DELETE"}
     assert FORBIDDEN_TABLE_PRIVILEGES["index_constituents"] == {"INSERT", "UPDATE", "DELETE"}
     assert FORBIDDEN_TABLE_PRIVILEGES["event_log"] == {"UPDATE", "DELETE"}
     assert FORBIDDEN_TABLE_PRIVILEGES["event_consumptions"] == {"UPDATE", "DELETE"}
+
+
+def test_mcp_permission_audit_prefers_restricted_mcp_dsn():
+    dsn = select_audit_dsn(
+        {
+            "AEQCS_PG_DSN": "postgresql://aeqcs_core:core@127.0.0.1:5432/aeqcs",
+            "AEQCS_CORE_PG_DSN": "postgresql://aeqcs_mcp:mcp@127.0.0.1:5432/aeqcs",
+        }
+    )
+
+    assert dsn == "postgresql://aeqcs_mcp:mcp@127.0.0.1:5432/aeqcs"
