@@ -1,7 +1,7 @@
 import base64
 import asyncio
 import logging
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
@@ -195,6 +195,31 @@ def persisted_running_backtest_task(task_id: str = "task-orphan") -> dict:
         "result": None,
         "error": None,
     }
+
+
+def persisted_running_pg_backtest_task(task_id: str = "task-orphan") -> dict:
+    return {
+        "task_id": task_id,
+        "backtest_result_id": task_id,
+        "status": "running",
+        "strategy_name": "buy_and_hold",
+        "start_date": date(2026, 1, 1),
+        "end_date": date(2026, 1, 2),
+        "as_of_date": date(2026, 1, 2),
+        "parameters": {"symbol": "000001", "initial_cash": "10000"},
+        "submitted_ts": datetime(2026, 1, 2),
+        "completed_ts": None,
+        "result": None,
+        "error": None,
+    }
+
+
+class TypeCheckingBacktestStore(FakeAsyncStore):
+    async def save_backtest_task(self, task):
+        assert isinstance(task["start_date"], date)
+        assert isinstance(task["end_date"], date)
+        assert isinstance(task["as_of_date"], date)
+        return await super().save_backtest_task(task)
 
 
 @pytest.mark.asyncio
@@ -900,6 +925,19 @@ async def test_mcp_backtest_task_marks_orphaned_persisted_running_task_failed():
     assert status["task_id"] == "task-orphan"
     assert status["status"] == "failed"
     assert "MCP process restart" in status["error"]
+    assert store.saved_backtest_tasks[-1]["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_mcp_orphaned_backtest_recovery_preserves_pg_date_types():
+    store = TypeCheckingBacktestStore()
+    store.saved_backtest_tasks.append(persisted_running_pg_backtest_task())
+    server = build_mcp_server(async_store=store, backend_name="postgresql")
+
+    _content, status = await server.call_tool("get_backtest_task", {"task_id": "task-orphan"})
+
+    assert status["status"] == "failed"
+    assert status["start_date"] == "2026-01-01"
     assert store.saved_backtest_tasks[-1]["status"] == "failed"
 
 

@@ -849,10 +849,10 @@ def build_mcp_server(
         if task:
             return budget_json_response(task, max_bytes=max_bytes)
         if async_store is not None:
-            task = to_jsonable(await async_store.get_backtest_task(backtest_result_id))
+            task = await async_store.get_backtest_task(backtest_result_id)
             if task:
                 recovered_task = await recover_orphaned_backtest_task(async_store, task)
-                return budget_json_response(recovered_task, max_bytes=max_bytes)
+                return budget_json_response(to_jsonable(recovered_task), max_bytes=max_bytes)
         if async_service is not None:
             return budget_json_response(
                 to_jsonable(await async_service.get_backtest_result(backtest_result_id)),
@@ -896,10 +896,10 @@ def build_mcp_server(
         if task:
             return budget_json_response(task, max_bytes=max_bytes)
         if async_store is not None:
-            task = to_jsonable(await async_store.get_backtest_task(task_id))
+            task = await async_store.get_backtest_task(task_id)
             if task:
                 task = await recover_orphaned_backtest_task(async_store, task)
-            return budget_json_response(task, max_bytes=max_bytes)
+            return budget_json_response(to_jsonable(task), max_bytes=max_bytes)
         return budget_json_response({}, max_bytes=max_bytes)
 
     @server.tool(description="Compute supported deterministic factors and persist the values.")

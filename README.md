@@ -8,11 +8,11 @@ The repository follows the v2 architecture:
 - cognitive layer separated by a proposal gate
 - PostgreSQL as the system of record, Parquet as cold analytical storage, DuckDB for local scans
 - Qlib integration where it reduces wheel reinvention, without letting Qlib own the authoritative data path
-- MCP stdio server as the boundary exposed to the cognitive layer
+- MCP HTTP/SSE server as the boundary exposed to the cognitive layer
 
 Core blueprint: [docs/AEQCS_ARCHITECTURE_V2.md](docs/AEQCS_ARCHITECTURE_V2.md).
 
-This scaffold implements the first development stage from the architecture document: project layout, core event schemas, look-ahead guards, storage wrappers, configuration, database bootstrap, factor/backtest interfaces, proposal gate primitives, and smoke tests.
+This branch implements the deterministic core layer: point-in-time data access, market and financial ETL boundaries, factor evaluation, backtesting, proposal gates, deterministic graph tools, risk/portfolio utilities, event bus, MCP HTTP/SSE boundary, and deployment verification entrypoints.
 
 ## Quick Start
 
@@ -42,7 +42,7 @@ The MCP tool logic can be exercised locally with
 `aeqcs.core.mcp_server.call_local_tool` and a `LocalStore` rooted at a test or
 development data directory.
 
-To start the local stdio MCP server:
+To start the local HTTP/SSE MCP server:
 
 ```powershell
 $env:AEQCS_LOCAL_ROOT = "data/local"
@@ -64,7 +64,7 @@ aeqcs/
   core/       deterministic event, clock, versioning, MCP boundary
   store/      PostgreSQL, Parquet, DuckDB access helpers
   data/       source adapters, ETL, validation, Qlib adapter
-  factor/     factor registry, evaluation, Qlib expression hooks
+  factor/     factor registry, evaluation, pipeline, genetic miner, risk model
   strategy/   tradability, event-driven backtest, performance analysis
   gate/       proposals, validation, promotion boundary
   knowledge/  semantic network and universe builder
@@ -84,25 +84,20 @@ tests/        unit and look-ahead tests
 
 Implemented:
 
-- canonical daily bar and financial indicator records
-- daily OHLCV quality checks
-- PIT financial slicing helpers
-- basic technical, fundamental, sentiment, and alternative factor helpers
-- deterministic long-only daily backtest with next-day-open execution, basic fees, slippage, and buy-side tradability filters
-- portfolio and drawdown primitives
-- local CSV-backed store for development before PostgreSQL is available
-- testable local implementations for key MCP tools
-- local stdio MCP server for currently implemented deterministic tools
-- lazy Tushare and Akshare adapters with normalized outputs
-- local importers for daily bars and PIT financial indicators
-- upload learning loop first pass: text/Markdown parsing, chunking, dedupe, and proposal extraction
-- opt-in PostgreSQL integration test entrypoint for TimescaleDB/pgvector stores
+- deterministic core MCP tools over HTTP/SSE
+- LocalStore and PostgreSQL/TimescaleDB store boundaries
+- PIT market, financial, index-constituent, and stock-universe access
+- Tushare financial path and baostock market-data path
+- baostock minute source, daily cross-check, daily quota, and no-concurrency lock
+- vintage assignment, dual adjusted-price output, and corporate-action state helpers
+- factor registry, factor pipeline, genetic miner, risk model helpers, and rolling validation gate
+- deterministic backtest task persistence and recovery
+- strategy risk and portfolio risk scans
+- event bus with lightweight PG NOTIFY payloads
+- systemd units, night DAG plans, restore rehearsal plans, and production verification scripts
 
-Still pending:
+Acceptance status:
 
-- live Tushare/Akshare adapters
-- live execution of the PostgreSQL integration tests against the target host
-- production PostgreSQL-backed MCP service wiring and deployment verification
-- production Qlib expression integration
-- fuller backtest execution model: sell-side execution, volume constraints, and finer limit-up/limit-down handling
-- Telegram, dashboard, report system, and full cognitive layer behavior
+- local suite: `479 passed, 3 skipped`
+- full suite with real TimescaleDB integration DSN: `482 passed`
+- production deployment acceptance is in progress; see [docs/PRODUCTION_ACCEPTANCE.md](docs/PRODUCTION_ACCEPTANCE.md)

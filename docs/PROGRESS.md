@@ -8,7 +8,7 @@
 
 ```text
 .\.venv\Scripts\python.exe -m pytest
-481 passed
+482 passed
 
 .\.venv\Scripts\python.exe -m ruff check .
 All checks passed!
@@ -326,14 +326,14 @@ passed
 
 ## 当前主要风险
 
-1. 真实 PostgreSQL/TimescaleDB 环境尚未在目标主机执行完整集成测试；高频表 autovacuum 参数、夜间 VACUUM 脚本、PG 连接预算、表膨胀 verifier 和 systemd `MemoryMax=16G` 已配置，但仍需在目标 systemd/cgroup/PG 环境实际运行 4 小时盘中负载后执行死元组比例抽查，并验证内存硬限制、连接预算和 HTTP/SSE 多连接压测生效。
+1. 真实 TimescaleDB 测试库已通过集成测试、权限审计和 MCP 回测恢复验收；高频表 autovacuum 参数、夜间 VACUUM 脚本、PG 连接预算、表膨胀 verifier 和 systemd `MemoryMax=16G` 已配置，但仍需在目标 systemd/cgroup/PG 环境实际运行 4 小时盘中负载后执行死元组比例抽查，并验证内存硬限制、连接预算和 HTTP/SSE 多连接压测生效。
 2. DuckDB/确定性因子管线当前覆盖动量因子、`roe_quarterly` / `debt_ratio_quarterly` / `equity_ratio_quarterly` / `debt_to_equity_quarterly` / `profit_yoy_quarterly` / `current_ratio_quarterly` / `quick_ratio_quarterly` / `revenue_yoy_quarterly` / `eps_quarterly` / `bps_quarterly` / `gross_margin_quarterly` / `net_margin_quarterly` / `margin_spread_quarterly` 基本面 PIT 因子、winsorize、zscore、行业/板块中性化和窗口类型防前视守卫；确定性遗传因子挖掘器已补回核心层，但更多基本面 PIT 因子仍需继续迁移到有界全市场 reduce 流程。
 3. Qlib 当前已完成入口守卫、risk_analysis、IC/IR 和组合优化标准化后置边界；组合优化已有确定性 long-only fallback，真实 Qlib 优化器接入仍需目标环境验证。
 4. 真实 Tushare/Akshare 网络数据源尚未在当前环境跑通。
 5. 事件总线已具备轻量通知发布、订阅侧回查、进程内幂等消费、数据库级跨进程消费声明、订阅取消清理和异常断线重连边界，盘中 CEP 已具备确定性扫描入口，并可把 CEP 告警发布为 `risk_alerts` 轻量事件；真实 PG LISTEN/NOTIFY 集成测试和目标环境告警投递脚本仍需在目标环境执行验证。
 6. 回测仍是最小框架；买卖方向盘口可成交性、涨跌停保守拒单、停牌顺延、bar 成交量约束和基础订单 filled/partial_filled/expired/rejected 生命周期已补入，更细粒度撮合和更完整订单状态机仍需扩展。
 7. 夜间 `batch-night` DAG 和恢复演练已具备确定性命令计划与 systemd 入口；`pg_dump`、Parquet 归档落盘、VACUUM FULL、HNSW 重建和隔离库 `system_health` 仍需在目标 PostgreSQL/TimescaleDB 环境实际执行演练。
-8. 当前工作区缺少 Git 元数据，无法做提交级审查和远端状态确认。
+8. 发布工作区已连接 GitHub 远端并推送 `codex/deterministic-core-layer` 分支；原始开发目录仍是非 Git 工作区，仅作为本机工作副本保留。
 
 ## 下一步建议
 
@@ -358,4 +358,23 @@ passed
 - Added risk factor registration, deterministic factor-return/covariance/specific-risk snapshot helpers, and cvxpy risk-constrained portfolio optimization.
 - Added rolling out-of-sample `backtest_check` with fold-majority pass criteria and validation settings.
 - Added CEP price-basis guard: rules using absolute limit prices must declare `price_basis: raw`.
-- Verification: real TimescaleDB-backed integration run passed (`tests/integration -m integration`: `3 passed`), and the full suite with the same real DB connection reports `481 passed`.
+- Verification: real TimescaleDB-backed integration run passed (`tests/integration -m integration`: `3 passed`), and the full suite with the same real DB connection reports `482 passed`.
+
+## 2026-07-01 production acceptance update
+
+- Published branch `codex/deterministic-core-layer` to `Jackiedunk/AEQCS` with deterministic core implementation.
+- Production acceptance started from the published branch, not from the non-git working directory.
+- Fixed a PostgreSQL-only MCP recovery bug found during acceptance: orphaned backtest recovery now preserves `date` objects for store writes and only JSON-normalizes the payload returned to MCP clients.
+- Added regression coverage for PostgreSQL-style backtest task recovery type preservation.
+- Local deployment checks passed:
+  - `python -m scripts.verify_core_offline`
+  - `python -m scripts.verify_mcp_concurrency --concurrency 16`
+  - `python -m aeqcs.runtime.batch night`
+  - `python -m aeqcs.runtime.batch restore-rehearsal --backup-date 2026-07-01`
+- Real TimescaleDB checks passed:
+  - `python -m pytest tests/integration -m integration`: `3 passed`
+  - `python -m scripts.verify_mcp_permissions`: `status=ok`
+  - `python -m scripts.verify_mcp_backtest_recovery`: `status=ok`
+  - full suite with real integration DSN: `482 passed`
+- Table bloat check was intentionally not marked accepted yet because the required 4-hour intraday observation window has not run on the target Linux/systemd host. A current-state probe reported insufficient observation time and dead tuples in `proposals`.
+- Remaining production acceptance is deployment-environment work: target host systemd/cgroup run, HTTP/SSE probe against the live service, four-hour intraday load, table-bloat recheck, real restore rehearsal into an isolated database, and baostock minute backfill dry-run against the live data source.
