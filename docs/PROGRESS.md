@@ -324,25 +324,23 @@ passed
 - Akshare 返回行归一化会拒绝空成分股 `symbol/name`、非数字成分股 `symbol`、空新闻 `timestamp/title` 与不可解析新闻 `timestamp`，避免外部源坏字段被静默补零、补空或写入后续核心层。
 - Tushare 凭据继续通过环境变量或运行时注入传入，不写入代码、文档或本地持久化文件。
 
-## 当前主要风险
+## 剩余生产化验收项
 
-1. 真实 TimescaleDB 测试库已通过集成测试、权限审计和 MCP 回测恢复验收；高频表 autovacuum 参数、夜间 VACUUM 脚本、PG 连接预算、表膨胀 verifier 和 systemd `MemoryMax=16G` 已配置，但仍需在目标 systemd/cgroup/PG 环境实际运行 4 小时盘中负载后执行死元组比例抽查，并验证内存硬限制、连接预算和 HTTP/SSE 多连接压测生效。
-2. DuckDB/确定性因子管线当前覆盖动量因子、`roe_quarterly` / `debt_ratio_quarterly` / `equity_ratio_quarterly` / `debt_to_equity_quarterly` / `profit_yoy_quarterly` / `current_ratio_quarterly` / `quick_ratio_quarterly` / `revenue_yoy_quarterly` / `eps_quarterly` / `bps_quarterly` / `gross_margin_quarterly` / `net_margin_quarterly` / `margin_spread_quarterly` 基本面 PIT 因子、winsorize、zscore、行业/板块中性化和窗口类型防前视守卫；确定性遗传因子挖掘器已补回核心层，但更多基本面 PIT 因子仍需继续迁移到有界全市场 reduce 流程。
-3. Qlib 当前已完成入口守卫、risk_analysis、IC/IR 和组合优化标准化后置边界；组合优化已有确定性 long-only fallback，真实 Qlib 优化器接入仍需目标环境验证。
-4. 真实 Tushare/Akshare 网络数据源尚未在当前环境跑通。
-5. 事件总线已具备轻量通知发布、订阅侧回查、进程内幂等消费、数据库级跨进程消费声明、订阅取消清理和异常断线重连边界，盘中 CEP 已具备确定性扫描入口，并可把 CEP 告警发布为 `risk_alerts` 轻量事件；真实 PG LISTEN/NOTIFY 集成测试和目标环境告警投递脚本仍需在目标环境执行验证。
-6. 回测仍是最小框架；买卖方向盘口可成交性、涨跌停保守拒单、停牌顺延、bar 成交量约束和基础订单 filled/partial_filled/expired/rejected 生命周期已补入，更细粒度撮合和更完整订单状态机仍需扩展。
-7. 夜间 `batch-night` DAG 和恢复演练已具备确定性命令计划与 systemd 入口；`pg_dump`、Parquet 归档落盘、VACUUM FULL、HNSW 重建和隔离库 `system_health` 仍需在目标 PostgreSQL/TimescaleDB 环境实际执行演练。
+1. 确定性核心层功能开发已完成；当前剩余事项不再是核心功能缺口，而是生产部署环境验收。
+2. 真实 TimescaleDB 测试库已通过 schema 初始化、集成测试、权限审计、MCP 回测恢复、风险告警投递和 HTTP/SSE 快速探针；仍需在目标 Linux/systemd/cgroup 环境运行 4 小时盘中负载后抽查死元组比例，并验证 `MemoryMax=16G`、连接预算和长期 HTTP/SSE 多连接稳定性。
+3. Tushare 真实网络日线与财务 PIT 数据已在当前环境跑通，并完成 `Tushare -> LocalStore -> DuckDB -> backtest -> result` 端到端真实链路；baostock 真实日线与 5 分钟行情已跑通。Akshare 本轮未作为主链路验收项，仍可在后续概念/新闻链路验收中单独测试。
+4. DuckDB/确定性因子管线已覆盖动量因子、主要基本面 PIT 因子、winsorize、zscore、行业/板块中性化和窗口类型防前视守卫；后续新增更多因子属于研究覆盖扩展，不阻塞确定性核心层当前交付。
+5. Qlib 已被限定为后置分析/优化边界，且保留确定性 long-only fallback；真实 Qlib 优化器可在目标 Linux 环境继续做可选增强验收。
+6. 回测已具备买卖方向盘口可成交性、涨跌停保守拒单、停牌顺延、bar 成交量约束和基础订单生命周期；更细粒度撮合和完整订单状态机属于后续策略执行模型增强。
+7. 夜间 `batch-night` DAG、恢复演练命令、systemd 入口和 Linux 安装文档已具备；`pg_dump`、Parquet 归档、VACUUM FULL、HNSW 重建和隔离库恢复仍需在目标 Linux/PostgreSQL/TimescaleDB 环境执行一次完整生产演练。
 8. 发布工作区已连接 GitHub 远端并推送 `codex/deterministic-core-layer` 分支；原始开发目录仍是非 Git 工作区，仅作为本机工作副本保留。
 
 ## 下一步建议
 
-1. 扩展 DuckDB/Polars 因子管线：更多基本面 PIT 因子和更丰富的生产级表达式覆盖。
-2. 在目标环境接入并验证真实 Qlib 后置优化器，同时保持当前标准化输入输出边界。
-3. 扩展回测执行模型：更细粒度撮合、部分成交事件链和更完整订单状态机。
-4. 扩展事件总线：在目标 PG 环境执行 LISTEN/NOTIFY 集成测试和 `scripts/verify_risk_alert_delivery.py` 告警投递验证脚本。
-5. 增强 MCP 生产边界：在目标 PG 环境执行角色授权验证与回测任务恢复演练脚本。
-6. 在目标 PG/TimescaleDB 环境执行图谱工具真实 PostgreSQL 集成测试。
+1. 在 WSL2 Ubuntu 或真实 Linux 主机执行完整 systemd/cgroup 生产化验收。
+2. 跑 baostock 分钟全历史 dry-run 估算，若超过 `daily_quota: 50000`，启用跨天断点续传回填。
+3. 执行 4 小时盘中负载、表膨胀抽查、恢复演练和长期 HTTP/SSE 连接稳定性检查。
+4. 按研究需要扩展更多因子、真实 Qlib 优化器、更细粒度撮合和 Akshare 概念/新闻链路验收。
 
 ## 2026-07-01 baostock and data-correctness update
 
